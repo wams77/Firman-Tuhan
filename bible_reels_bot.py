@@ -15,7 +15,7 @@ BASE_DIR = os.path.abspath(os.getcwd())
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
 # ID Suara ElevenLabs (Masukkan ID 'Marcus' atau gunakan 'pNInz6obpgDQGcFmaJgB' untuk 'Adam' yang sangat berwibawa)
-ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "pNInz6obpgDQGcFmaJgB") 
+ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "bfGb7JTLUnZebZRiFYyq") 
 
 genai.configure(api_key=GEMINI_API_KEY)
 
@@ -40,7 +40,7 @@ def generate_bible_content(num_videos=5):
     """
     
     # Menggunakan model 1.5-flash yang 100% stabil dan mendukung semua akun gratis
-    model = genai.GenerativeModel('gemini-3.6-flash')
+    model = genai.GenerativeModel('gemini-3.5-flash')
     
     raw_text = ""
     max_retries = 3

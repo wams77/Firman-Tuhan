@@ -254,16 +254,18 @@ def upload_to_facebook(video_path, caption, index):
     else: raise Exception(f"Gagal Upload: {pub_res}")
 
 # ==========================================
-# EKSEKUTOR UTAMA
+# EKSEKUTOR UTAMA (5 VIDEO + JEDA ACAK ANTI-SPAM)
 # ==========================================
 if __name__ == "__main__":
-    print("✝️ MEMULAI BOT PENGINJIL DIGITAL (5 VIDEO) ✝️\n")
+    # Angka 5 di bawah ini adalah perintah untuk membuat 5 video sekaligus
+    JUMLAH_VIDEO = 5 
+    print(f"✝️ MEMULAI BOT PENGINJIL DIGITAL ({JUMLAH_VIDEO} VIDEO) ✝️\n")
     
-    batch = generate_bible_content(5)
+    batch = generate_bible_content(JUMLAH_VIDEO)
     
     for i, item in enumerate(batch, 1):
         try:
-            print(f"--- MENGERJAKAN VIDEO {i} DARI 5 ---")
+            print(f"--- MENGERJAKAN VIDEO {i} DARI {len(batch)} ---")
             naskah_suara = f"{item['ayat']} {item['renungan'].replace(chr(10), ' ')} {item['cta']}"
             
             img_bg = os.path.join(BASE_DIR, f"jesus_bg_{i}.jpg")
@@ -272,16 +274,26 @@ if __name__ == "__main__":
             
             caption = f"{item['ayat']}\n\n{item['renungan']}\n\n{item['cta']}\n\n#FirmanTuhan #AyatAlkitab #RenunganHarian #TuhanYesus #Kristen #Rohani #InspirasiKristen"
             
-            # Eksekusi Tahapan
+            # 1. Eksekusi Tahapan Pembuatan Video
             generate_cinematic_jesus(item['prompt_gambar'], img_bg)
             generate_elevenlabs_voice(naskah_suara, audio_file)
             render_bible_video(img_bg, audio_file, item, output_file)
             
-            upload_to_facebook(output_file, caption, i)
+            # 2. Keamanan Ganda & Upload
+            if os.path.exists(output_file):
+                upload_to_facebook(output_file, caption, i)
+            else:
+                raise Exception("File video hilang sebelum di-upload!")
             
-            if i < 5:
-                print("⏳ Jeda 60 detik anti-spam Facebook...\n")
-                time.sleep(60)
+            # 3. SISTEM JEDA ANTI-SPAM (RANDOM DELAY)
+            # Jeda hanya dilakukan jika ini bukan video terakhir
+            if i < len(batch):
+                # Memilih waktu jeda secara acak antara 60 detik (1 menit) hingga 180 detik (3 menit)
+                waktu_jeda = random.randint(60, 180)
+                print(f"⏳ Keamanan Anti-Spam aktif: Bot beristirahat selama {waktu_jeda} detik sebelum video berikutnya...\n")
+                time.sleep(waktu_jeda)
                 
         except Exception as e:
             print(f"❌ Kesalahan pada video {i}: {e}\n")
+            
+    print("🎉 SEMUA TUGAS SELESAI! 5 VIDEO FIRMAN TUHAN TELAH BERHASIL DIBUAT DAN DIUNGGAH! 🎉")

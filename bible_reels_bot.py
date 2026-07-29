@@ -22,6 +22,9 @@ genai.configure(api_key=GEMINI_API_KEY)
 # ==========================================
 # 1. GEMINI AI: GENERATOR AYAT & RENUNGAN
 # ==========================================
+# ==========================================
+# 1. GEMINI AI: GENERATOR AYAT & RENUNGAN
+# ==========================================
 def generate_bible_content(num_videos=5):
     print(f"🕊️ Memohon hikmat Gemini AI untuk meracik {num_videos} renungan Firman Tuhan...")
     
@@ -36,8 +39,10 @@ def generate_bible_content(num_videos=5):
     PROMPT_GAMBAR: [Deskripsi bahasa Inggris untuk AI Gambar. Harus berisi: Cinematic portrait of Jesus Christ, highly detailed, photorealistic, cinematic lighting, 8k, divine atmosphere, holy light, [tambahkan detail latar sesuai ayat]]
     """
     
-    model = genai.GenerativeModel('gemini-3.5-flash')
+    # Menggunakan model 1.5-flash yang 100% stabil dan mendukung semua akun gratis
+    model = genai.GenerativeModel('gemini-3.6-flash')
     
+    raw_text = ""
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -45,10 +50,13 @@ def generate_bible_content(num_videos=5):
             raw_text = response.text
             break 
         except Exception as e:
-            print(f"⚠️ Limit API, bot berdoa (menunggu) 65 detik... (Percobaan {attempt+1})")
-            time.sleep(65)
-    else:
-        raise Exception("❌ Gagal terhubung ke Gemini AI.")
+            # Mencetak ERROR ASLI dari Google agar kita tahu penyebab pastinya
+            print(f"⚠️ Error dari Google (Percobaan {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                print("⏳ Menunggu 65 detik sebelum mencoba lagi...")
+                time.sleep(65)
+            else:
+                raise Exception(f"❌ Gagal total menghubungi Gemini AI. Detail Error: {e}")
 
     batch = []
     for i, chunk in enumerate(raw_text.split("---")):

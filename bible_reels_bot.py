@@ -10,18 +10,11 @@ from PIL import Image, ImageDraw, ImageFont
 BASE_DIR = os.path.abspath(os.getcwd())
 
 # ==========================================
-# KONFIGURASI API (GEMINI & ELEVENLABS)
+# KONFIGURASI API (GEMINI AI)
 # ==========================================
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
-# ID Suara ElevenLabs (Masukkan ID 'Marcus' atau gunakan 'pNInz6obpgDQGcFmaJgB' untuk 'Adam' yang sangat berwibawa)
-ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "bfGb7JTLUnZebZRiFYyq") 
-
 genai.configure(api_key=GEMINI_API_KEY)
 
-# ==========================================
-# 1. GEMINI AI: GENERATOR AYAT & RENUNGAN
-# ==========================================
 # ==========================================
 # 1. GEMINI AI: GENERATOR AYAT & RENUNGAN
 # ==========================================
@@ -30,7 +23,7 @@ def generate_bible_content(num_videos=5):
     
     prompt = f"""
     Bertindaklah sebagai Pendeta dan konten kreator rohani Kristen yang penuh karisma. 
-    Buatlah {num_videos} naskah video pendek (Reels) berdasarkan ayat Alkitab.
+    Buatlah {num_videos} naskah video pendek (Reels) berdasarkan ayat Alkitab dalam Bahasa Indonesia.
     Gunakan pemisah '---' antar naskah. Format persis seperti ini:
     
     AYAT: [Kutipan ayat Alkitab, misal: "Tuhan adalah gembalaku, takkan kekurangan aku." - Mazmur 23:1]
@@ -39,7 +32,6 @@ def generate_bible_content(num_videos=5):
     PROMPT_GAMBAR: [Deskripsi bahasa Inggris untuk AI Gambar. Harus berisi: Cinematic portrait of Jesus Christ, highly detailed, photorealistic, cinematic lighting, 8k, divine atmosphere, holy light, [tambahkan detail latar sesuai ayat]]
     """
     
-    # Menggunakan model 1.5-flash yang 100% stabil dan mendukung semua akun gratis
     model = genai.GenerativeModel('gemini-3.5-flash')
     
     raw_text = ""
@@ -50,13 +42,11 @@ def generate_bible_content(num_videos=5):
             raw_text = response.text
             break 
         except Exception as e:
-            # Mencetak ERROR ASLI dari Google agar kita tahu penyebab pastinya
             print(f"⚠️ Error dari Google (Percobaan {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
-                print("⏳ Menunggu 65 detik sebelum mencoba lagi...")
                 time.sleep(65)
             else:
-                raise Exception(f"❌ Gagal total menghubungi Gemini AI. Detail Error: {e}")
+                raise Exception(f"❌ Gagal total menghubungi Gemini AI: {e}")
 
     batch = []
     for i, chunk in enumerate(raw_text.split("---")):
@@ -86,7 +76,6 @@ def generate_bible_content(num_videos=5):
 # ==========================================
 def generate_cinematic_jesus(prompt, output_filename):
     print(f"🎨 Melukis visual sinematik: '{prompt[:50]}...'")
-    # Menambahkan instruksi ketat agar gambar vertikal dan sinematik
     full_prompt = f"{prompt}, vertical 9:16 aspect ratio, dramatic lighting, masterpiece, trending on artstation"
     encoded_prompt = urllib.parse.quote(full_prompt)
     seed = random.randint(1, 999999)
@@ -100,34 +89,14 @@ def generate_cinematic_jesus(prompt, output_filename):
     raise Exception("Gagal menghasilkan gambar dari AI.")
 
 # ==========================================
-# 3. ELEVENLABS API: SUARA BERWIBAWA (MARCUS)
+# 3. EDGE-TTS: SUARA BERWIBAWA & GRATIS
 # ==========================================
-def generate_elevenlabs_voice(text, output_audio):
-    print("🎙️ Merekam suara berwibawa menggunakan ElevenLabs...")
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
-    
-    headers = {
-        "Accept": "audio/mpeg",
-        "Content-Type": "application/json",
-        "xi-api-key": ELEVENLABS_API_KEY
-    }
-    
-    data = {
-        "text": text,
-        "model_id": "eleven_multilingual_v2",
-        "voice_settings": {
-            "stability": 0.45,       # Lebih beremosi
-            "similarity_boost": 0.85 # Mengikuti karakter asli suara (wibawa)
-        }
-    }
-    
-    response = requests.post(url, json=data, headers=headers)
-    if response.status_code == 200:
-        with open(output_audio, 'wb') as f:
-            f.write(response.content)
-        return output_audio
-    else:
-        raise Exception(f"Error ElevenLabs: {response.text}")
+def generate_edge_tts_voice(text, output_audio):
+    print("🎙️ Merekam suara narator berwibawa (Edge-TTS)...")
+    # Menggunakan suara ArdiNeural dengan kecepatan agak lambat (-5%) agar terasa khidmat dan berwibawa
+    command = f'edge-tts --voice id-ID-ArdiNeural --rate=-5% --text "{text}" --write-media "{output_audio}"'
+    os.system(command)
+    return output_audio
 
 # ==========================================
 # 4. TEKS ESTETIK BIBLE REELS
@@ -173,7 +142,6 @@ def create_text_overlay(item, output_path, img_size=(1080, 1920)):
         for line in lines:
             w = draw.textbbox((0,0), line, font=font)[2]
             x = (img_size[0] - w) // 2
-            # Efek Outline Hitam Tebal
             for ax, ay in [(-3,0),(3,0),(0,-3),(0,3),(-3,-3),(3,3)]:
                 draw.text((x+ax, y+ay), line, font=font, fill="black")
             draw.text((x, y), line, font=font, fill=color)
@@ -185,45 +153,33 @@ def create_text_overlay(item, output_path, img_size=(1080, 1920)):
 # 5. EDITOR VIDEO (MIX AUDIO + BGM + GAMBAR)
 # ==========================================
 def render_bible_video(img_bg_path, voice_path, item, output_video):
-    print("🎬 Merakit Video Firman Tuhan (Mixing Audio & Visual)...")
-    
-    # 1. Siapkan Voiceover
+    print("🎬 Merakit Video Firman Tuhan...")
     voice_clip = AudioFileClip(voice_path)
     video_duration = voice_clip.duration + 2.0 
     
-    # 2. Siapkan Background Music (BGM Soft Piano)
     bgm_file = os.path.join(BASE_DIR, "bgm.mp3")
-    final_audio = voice_clip # Default jika BGM tidak ada
+    final_audio = voice_clip 
     
     if os.path.exists(bgm_file):
         print("   -> Menambahkan musik latar surgawi (BGM)...")
         bgm_clip = AudioFileClip(bgm_file)
-        
-        # Mengecilkan volume BGM (10% dari asli) agar suara Marcus tetap dominan
         try:
             bgm_clip = bgm_clip.volumex(0.12)
         except AttributeError:
-            bgm_clip = bgm_clip.multiply_volume(0.12) # Fallback moviepy v2
+            bgm_clip = bgm_clip.multiply_volume(0.12)
             
-        # Looping BGM jika lebih pendek dari narasi
         if bgm_clip.duration < video_duration:
             n_loops = int(video_duration // bgm_clip.duration) + 1
             bgm_clip = concatenate_audioclips([bgm_clip] * n_loops)
             
         bgm_clip = bgm_clip.subclipped(0, video_duration)
-        
-        # Menggabungkan BGM + Voice (Voice mulai setelah 0.5 detik)
         final_audio = CompositeAudioClip([bgm_clip, voice_clip.with_start(0.5)])
     
-    # 3. Siapkan Visual (Background Gambar AI)
     visual_clip = ImageClip(img_bg_path).with_duration(video_duration)
-    
-    # 4. Siapkan Overlay Gelap & Teks
     overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.55).with_duration(video_duration)
     txt_img_path = create_text_overlay(item, os.path.join(BASE_DIR, "bible_text_temp.png"))
     txt_clip = ImageClip(txt_img_path).with_duration(video_duration)
     
-    # 5. Render Final
     video = CompositeVideoClip([visual_clip, overlay, txt_clip]).with_audio(final_audio)
     video.write_videofile(output_video, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
     
@@ -262,10 +218,9 @@ def upload_to_facebook(video_path, caption, index):
     else: raise Exception(f"Gagal Upload: {pub_res}")
 
 # ==========================================
-# EKSEKUTOR UTAMA (5 VIDEO + JEDA ACAK ANTI-SPAM)
+# EKSEKUTOR UTAMA
 # ==========================================
 if __name__ == "__main__":
-    # Angka 5 di bawah ini adalah perintah untuk membuat 5 video sekaligus
     JUMLAH_VIDEO = 5 
     print(f"✝️ MEMULAI BOT PENGINJIL DIGITAL ({JUMLAH_VIDEO} VIDEO) ✝️\n")
     
@@ -282,23 +237,18 @@ if __name__ == "__main__":
             
             caption = f"{item['ayat']}\n\n{item['renungan']}\n\n{item['cta']}\n\n#FirmanTuhan #AyatAlkitab #RenunganHarian #TuhanYesus #Kristen #Rohani #InspirasiKristen"
             
-            # 1. Eksekusi Tahapan Pembuatan Video
             generate_cinematic_jesus(item['prompt_gambar'], img_bg)
-            generate_elevenlabs_voice(naskah_suara, audio_file)
+            generate_edge_tts_voice(naskah_suara, audio_file)
             render_bible_video(img_bg, audio_file, item, output_file)
             
-            # 2. Keamanan Ganda & Upload
             if os.path.exists(output_file):
                 upload_to_facebook(output_file, caption, i)
             else:
                 raise Exception("File video hilang sebelum di-upload!")
             
-            # 3. SISTEM JEDA ANTI-SPAM (RANDOM DELAY)
-            # Jeda hanya dilakukan jika ini bukan video terakhir
             if i < len(batch):
-                # Memilih waktu jeda secara acak antara 60 detik (1 menit) hingga 180 detik (3 menit)
                 waktu_jeda = random.randint(60, 180)
-                print(f"⏳ Keamanan Anti-Spam aktif: Bot beristirahat selama {waktu_jeda} detik sebelum video berikutnya...\n")
+                print(f"⏳ Keamanan Anti-Spam aktif: Beristirahat selama {waktu_jeda} detik...\n")
                 time.sleep(waktu_jeda)
                 
         except Exception as e:

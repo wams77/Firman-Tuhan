@@ -6,7 +6,10 @@ import urllib.parse
 import asyncio
 import edge_tts
 import google.generativeai as genai
+
+# Impor MoviePy 2.0 beserta modul Efek Volume-nya
 from moviepy import AudioFileClip, CompositeAudioClip, CompositeVideoClip, ColorClip, ImageClip, concatenate_audioclips
+from moviepy.audio.fx import MultiplyVolume
 from PIL import Image, ImageDraw, ImageFont
 
 BASE_DIR = os.path.abspath(os.getcwd())
@@ -15,7 +18,9 @@ BASE_DIR = os.path.abspath(os.getcwd())
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
+# ==========================================
 # 1. GEMINI AI: GENERATOR AYAT & RENUNGAN
+# ==========================================
 def generate_bible_content(num_videos=5):
     print(f"🕊️ Memohon hikmat Gemini AI untuk meracik {num_videos} renungan Firman Tuhan...")
     
@@ -69,7 +74,9 @@ def generate_bible_content(num_videos=5):
     print(f"✅ Berhasil meracik {len(batch)} Naskah Firman Tuhan!")
     return batch
 
+# ==========================================
 # 2. POLLINATIONS AI: GENERATOR GAMBAR YESUS
+# ==========================================
 def generate_cinematic_jesus(prompt, output_filename):
     print(f"🎨 Melukis visual sinematik: '{prompt[:50]}...'")
     full_prompt = f"{prompt}, vertical 9:16 aspect ratio, dramatic lighting, masterpiece, trending on artstation"
@@ -84,7 +91,9 @@ def generate_cinematic_jesus(prompt, output_filename):
         return output_filename
     raise Exception("Gagal menghasilkan gambar dari AI.")
 
+# ==========================================
 # 3. EDGE-TTS NATIVE (DIJAMIN FILE AUDIO TERCIPTA)
+# ==========================================
 async def _generate_audio_async(text, output_audio):
     communicate = edge_tts.Communicate(text, "id-ID-ArdiNeural", rate="-5%")
     await communicate.save(output_audio)
@@ -96,7 +105,9 @@ def generate_edge_tts_voice(text, output_audio):
         raise Exception(f"File audio {output_audio} gagal dibuat!")
     return output_audio
 
+# ==========================================
 # 4. TEKS ESTETIK BIBLE REELS
+# ==========================================
 def get_custom_font():
     font_filename = os.path.join(BASE_DIR, "Montserrat-Black.ttf")
     if not os.path.exists(font_filename) or os.path.getsize(font_filename) < 100000:
@@ -145,7 +156,9 @@ def create_text_overlay(item, output_path, img_size=(1080, 1920)):
     img.save(output_path)
     return output_path
 
+# ==========================================
 # 5. EDITOR VIDEO (MIX AUDIO + BGM + GAMBAR)
+# ==========================================
 def render_bible_video(img_bg_path, voice_path, item, output_video):
     print("🎬 Merakit Video Firman Tuhan...")
     voice_clip = AudioFileClip(voice_path)
@@ -157,10 +170,9 @@ def render_bible_video(img_bg_path, voice_path, item, output_video):
     if os.path.exists(bgm_file):
         print("   -> Menambahkan musik latar surgawi (BGM)...")
         bgm_clip = AudioFileClip(bgm_file)
-        try:
-            bgm_clip = bgm_clip.volumex(0.12)
-        except AttributeError:
-            bgm_clip = bgm_clip.multiply_volume(0.12)
+        
+        # PERBAIKAN MOVIEPY 2.0: Mengecilkan volume menggunakan efek MultiplyVolume
+        bgm_clip = bgm_clip.with_effects([MultiplyVolume(0.12)])
             
         if bgm_clip.duration < video_duration:
             n_loops = int(video_duration // bgm_clip.duration) + 1
@@ -183,7 +195,9 @@ def render_bible_video(img_bg_path, voice_path, item, output_video):
     
     return output_video
 
+# ==========================================
 # 6. UPLOAD KE FACEBOOK REELS
+# ==========================================
 def upload_to_facebook(video_path, caption, index):
     print(f"[{index}/5] 🚀 Mengunggah Firman Tuhan ke Facebook Reels...")
     page_id = os.environ.get("FB_PAGE_ID")
@@ -209,7 +223,9 @@ def upload_to_facebook(video_path, caption, index):
     if pub_res.get("success"): print(f"[{index}/5] 🎉 BERHASIL DIUNGGAH!\n")
     else: raise Exception(f"Gagal Upload: {pub_res}")
 
+# ==========================================
 # EKSEKUTOR UTAMA
+# ==========================================
 if __name__ == "__main__":
     JUMLAH_VIDEO = 5 
     print(f"✝️ MEMULAI BOT PENGINJIL DIGITAL ({JUMLAH_VIDEO} VIDEO) ✝️\n")

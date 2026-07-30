@@ -206,6 +206,10 @@ def upload_to_facebook(video_path, caption, index):
     init_res = requests.post(f"https://graph.facebook.com/v18.0/{page_id}/video_reels", 
                              data={"upload_phase": "start", "access_token": access_token}).json()
     
+    # Menangkap error asli dari Meta jika ditolak
+    if "video_id" not in init_res:
+        raise Exception(f"Ditolak oleh Facebook API! Balasan Meta: {init_res}")
+        
     video_fbid, upload_url = init_res["video_id"], init_res["upload_url"]
     
     with open(video_path, 'rb') as f: video_data = f.read()
@@ -220,9 +224,10 @@ def upload_to_facebook(video_path, caption, index):
         "video_state": "PUBLISHED", "description": caption
     }).json()
     
-    if pub_res.get("success"): print(f"[{index}/5] 🎉 BERHASIL DIUNGGAH!\n")
-    else: raise Exception(f"Gagal Upload: {pub_res}")
-
+    if pub_res.get("success"): 
+        print(f"[{index}/5] 🎉 BERHASIL DIUNGGAH KE FACEBOOK REELS!\n")
+    else: 
+        raise Exception(f"Gagal Publikasi: {pub_res}")
 # ==========================================
 # EKSEKUTOR UTAMA
 # ==========================================

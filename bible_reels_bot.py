@@ -21,7 +21,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 # ==========================================
 # 1. GEMINI AI: GENERATOR AYAT & RENUNGAN
 # ==========================================
-def generate_bible_content(num_videos=5):
+def generate_bible_content(num_videos=1):
     print(f"🕊️ Memohon hikmat Gemini AI untuk meracik {num_videos} renungan Firman Tuhan...")
     
     prompt = f"""

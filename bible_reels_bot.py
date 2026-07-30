@@ -232,7 +232,7 @@ def upload_to_facebook(video_path, caption, index):
 # EKSEKUTOR UTAMA
 # ==========================================
 if __name__ == "__main__":
-    JUMLAH_VIDEO = 5 
+    JUMLAH_VIDEO = 1 
     print(f"✝️ MEMULAI BOT PENGINJIL DIGITAL ({JUMLAH_VIDEO} VIDEO) ✝️\n")
     
     batch = generate_bible_content(JUMLAH_VIDEO)

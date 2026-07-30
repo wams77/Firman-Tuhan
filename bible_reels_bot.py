@@ -8,7 +8,7 @@ import edge_tts
 import google.generativeai as genai
 
 # Impor MoviePy 2.0 beserta modul Efek Volume-nya
-from moviepy import AudioFileClip, CompositeAudioClip, CompositeVideoClip, ColorClip, ImageClip, concatenate_audioclips
+from moviepy import AudioFileClip, CompositeAudioClip, CompositeVideoClip, ColorClip, ImageClip, concatenate_videoclips, concatenate_audioclips
 from moviepy.audio.fx import MultiplyVolume
 from PIL import Image, ImageDraw, ImageFont
 
@@ -46,7 +46,7 @@ def generate_bible_content(num_videos=5):
             break 
         except Exception as e:
             print(f"⚠️ Error dari Google (Percobaan {attempt+1}/{max_retries}): {e}")
-            if attempt < max_retries - 3:
+            if attempt < max_retries - 1:
                 time.sleep(65)
             else:
                 raise Exception(f"❌ Gagal total menghubungi Gemini AI: {e}")
@@ -92,7 +92,7 @@ def generate_cinematic_jesus(prompt, output_filename):
     raise Exception("Gagal menghasilkan gambar dari AI.")
 
 # ==========================================
-# 3. EDGE-TTS NATIVE (DIJAMIN FILE AUDIO TERCIPTA)
+# 3. EDGE-TTS NATIVE (SUARA BERWIBAWA)
 # ==========================================
 async def _generate_audio_async(text, output_audio):
     communicate = edge_tts.Communicate(text, "id-ID-ArdiNeural", rate="-5%")
@@ -106,7 +106,7 @@ def generate_edge_tts_voice(text, output_audio):
     return output_audio
 
 # ==========================================
-# 4. TEKS ESTETIK BIBLE REELS
+# 4. TEKS ESTETIK (STATIC + TYPEWRITER)
 # ==========================================
 def get_custom_font():
     font_filename = os.path.join(BASE_DIR, "Montserrat-Black.ttf")
@@ -118,43 +118,89 @@ def get_custom_font():
             f.write(r.content)
     return font_filename
 
-def create_text_overlay(item, output_path, img_size=(1080, 1920)):
+def wrap_text(text, font, draw, max_w):
+    """Fungsi pembantu untuk memotong teks agar tidak keluar batas layar"""
+    words = text.split()
+    lines, curr = [], ""
+    for w in words:
+        test = f"{curr} {w}".strip()
+        if draw.textlength(test, font=font) <= max_w: 
+            curr = test
+        else: 
+            lines.append(curr)
+            curr = w
+    if curr: lines.append(curr)
+    return lines
+
+def create_static_verse(item, output_path, img_size=(1080, 1920)):
+    """Membuat Ayat Alkitab yang diam (statis) di bagian atas video"""
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    font_path = get_custom_font()
-    font_ayat = ImageFont.truetype(font_path, 50)
-    font_renungan = ImageFont.truetype(font_path, 42)
-    font_cta = ImageFont.truetype(font_path, 45)
+    font = ImageFont.truetype(get_custom_font(), 45)
+    max_w = img_size[0] - 200 # Margin aman
     
-    max_w = img_size[0] - 140 
+    lines = wrap_text(item['ayat'], font, draw, max_w)
+    y = 250 # Posisi agak ke atas
     
-    def wrap_text(text, font):
-        words = text.split()
-        lines, curr = [], ""
-        for w in words:
-            test = f"{curr} {w}".strip()
-            if (draw.textbbox((0,0), test, font=font)[2]) <= max_w: curr = test
-            else: lines.append(curr); curr = w
-        if curr: lines.append(curr)
-        return lines
-
-    blocks = [
-        (wrap_text(item['ayat'], font_ayat), font_ayat, "gold", 350),
-        (wrap_text(item['renungan'], font_renungan), font_renungan, "white", 800),
-        ([f"🙏 {item['cta']}"], font_cta, "cyan", 1450)
-    ]
-    
-    for lines, font, color, y in blocks:
-        for line in lines:
-            w = draw.textbbox((0,0), line, font=font)[2]
-            x = (img_size[0] - w) // 2
-            for ax, ay in [(-3,0),(3,0),(0,-3),(0,3),(-3,-3),(3,3)]:
-                draw.text((x+ax, y+ay), line, font=font, fill="black")
-            draw.text((x, y), line, font=font, fill=color)
-            y += 70
+    for line in lines:
+        w = draw.textlength(line, font=font)
+        x = (img_size[0] - w) // 2
+        for ax, ay in [(-3,0),(3,0),(0,-3),(0,3),(-2,-2),(2,2),(-2,2),(2,-2)]:
+            draw.text((x+ax, y+ay), line, font=font, fill="black")
+        draw.text((x, y), line, font=font, fill="gold")
+        y += font.size + 15
+        
     img.save(output_path)
     return output_path
+
+def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
+    """Membuat efek Typewriter Subtitle (muncul kata per kata) untuk Voice Over"""
+    print("📝 Menggambar frame Typewriter Dinamis...")
+    font = ImageFont.truetype(get_custom_font(), 50)
+    max_w = img_size[0] - 200
+    
+    words = text.split()
+    if not words: return None
+    
+    # Kelompokkan teks per 5 kata agar tidak menumpuk memenuhi layar
+    chunk_size = 5
+    chunks = [words[i:i+chunk_size] for i in range(0, len(words), chunk_size)]
+    
+    # Waktu dibagi rata berdasarkan jumlah kata agar selaras dengan suara
+    time_per_word = audio_duration / len(words)
+    clips = []
+    
+    for i, chunk_words in enumerate(chunks):
+        for j in range(1, len(chunk_words) + 1):
+            current_text = " ".join(chunk_words[:j])
+            
+            img = Image.new("RGBA", img_size, (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            
+            current_lines = wrap_text(current_text, font, draw, max_w)
+            
+            # Posisikan teks di tengah-bawah layar
+            total_h = len(current_lines) * (font.size + 15)
+            y = 1100 - (total_h // 2)
+            
+            for line in current_lines:
+                w = draw.textlength(line, font=font)
+                x = (img_size[0] - w) // 2
+                for ax, ay in [(-3,0),(3,0),(0,-3),(0,3),(-2,-2),(2,2),(-2,2),(2,-2)]:
+                    draw.text((x+ax, y+ay), line, font=font, fill="black")
+                draw.text((x, y), line, font=font, fill="white")
+                y += font.size + 15
+                
+            temp_path = os.path.join(BASE_DIR, f"temp_sub_{i}_{j}.png")
+            img.save(temp_path)
+            
+            clip = ImageClip(temp_path).with_duration(time_per_word)
+            clips.append(clip)
+            
+    if clips:
+        return concatenate_videoclips(clips)
+    return None
 
 # ==========================================
 # 5. EDITOR VIDEO (MIX AUDIO + BGM + GAMBAR)
@@ -164,29 +210,38 @@ def render_bible_video(img_bg_path, voice_path, item, output_video):
     voice_clip = AudioFileClip(voice_path)
     video_duration = voice_clip.duration + 2.0 
     
+    # --- AUDIO MIXING ---
     bgm_file = os.path.join(BASE_DIR, "bgm.mp3")
     final_audio = voice_clip 
     
     if os.path.exists(bgm_file):
         print("   -> Menambahkan musik latar surgawi (BGM)...")
-        bgm_clip = AudioFileClip(bgm_file)
-        
-        # PERBAIKAN MOVIEPY 2.0: Mengecilkan volume menggunakan efek MultiplyVolume
-        bgm_clip = bgm_clip.with_effects([MultiplyVolume(0.12)])
-            
+        bgm_clip = AudioFileClip(bgm_file).with_effects([MultiplyVolume(0.12)])
         if bgm_clip.duration < video_duration:
             n_loops = int(video_duration // bgm_clip.duration) + 1
             bgm_clip = concatenate_audioclips([bgm_clip] * n_loops)
-            
         bgm_clip = bgm_clip.subclipped(0, video_duration)
         final_audio = CompositeAudioClip([bgm_clip, voice_clip.with_start(0.5)])
     
+    # --- VISUAL MIXING ---
     visual_clip = ImageClip(img_bg_path).with_duration(video_duration)
     overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.55).with_duration(video_duration)
-    txt_img_path = create_text_overlay(item, os.path.join(BASE_DIR, "bible_text_temp.png"))
-    txt_clip = ImageClip(txt_img_path).with_duration(video_duration)
     
-    video = CompositeVideoClip([visual_clip, overlay, txt_clip]).with_audio(final_audio)
+    # 1. Ayat Statis (Diam di atas)
+    verse_path = create_static_verse(item, os.path.join(BASE_DIR, "verse_temp.png"))
+    verse_clip = ImageClip(verse_path).with_duration(video_duration)
+    
+    video_layers = [visual_clip, overlay, verse_clip]
+    
+    # 2. Efek Typewriter (Renungan & CTA)
+    text_to_type = f"{item['renungan']} 🙏 {item['cta']}"
+    subs_clip = create_typewriter_subtitles(text_to_type, voice_clip.duration)
+    
+    if subs_clip:
+        subs_clip = subs_clip.with_start(0.5) # Mulai bersamaan dengan Voice Over
+        video_layers.append(subs_clip)
+    
+    video = CompositeVideoClip(video_layers).with_audio(final_audio)
     video.write_videofile(output_video, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast")
     
     try:
@@ -206,7 +261,6 @@ def upload_to_facebook(video_path, caption, index):
     init_res = requests.post(f"https://graph.facebook.com/v18.0/{page_id}/video_reels", 
                              data={"upload_phase": "start", "access_token": access_token}).json()
     
-    # Menangkap error asli dari Meta jika ditolak
     if "video_id" not in init_res:
         raise Exception(f"Ditolak oleh Facebook API! Balasan Meta: {init_res}")
         
@@ -228,6 +282,7 @@ def upload_to_facebook(video_path, caption, index):
         print(f"[{index}/5] 🎉 BERHASIL DIUNGGAH KE FACEBOOK REELS!\n")
     else: 
         raise Exception(f"Gagal Publikasi: {pub_res}")
+
 # ==========================================
 # EKSEKUTOR UTAMA
 # ==========================================

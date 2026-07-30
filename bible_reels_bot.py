@@ -21,7 +21,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 # ==========================================
 # 1. GEMINI AI: GENERATOR AYAT & RENUNGAN
 # ==========================================
-def generate_bible_content(num_videos=1):
+def generate_bible_content(num_videos=5):
     print(f"🕊️ Memohon hikmat Gemini AI untuk meracik {num_videos} renungan Firman Tuhan...")
     
     prompt = f"""
@@ -46,7 +46,7 @@ def generate_bible_content(num_videos=1):
             break 
         except Exception as e:
             print(f"⚠️ Error dari Google (Percobaan {attempt+1}/{max_retries}): {e}")
-            if attempt < max_retries - 1:
+            if attempt < max_retries - 3:
                 time.sleep(65)
             else:
                 raise Exception(f"❌ Gagal total menghubungi Gemini AI: {e}")
@@ -232,7 +232,7 @@ def upload_to_facebook(video_path, caption, index):
 # EKSEKUTOR UTAMA
 # ==========================================
 if __name__ == "__main__":
-    JUMLAH_VIDEO = 1 
+    JUMLAH_VIDEO = 5 
     print(f"✝️ MEMULAI BOT PENGINJIL DIGITAL ({JUMLAH_VIDEO} VIDEO) ✝️\n")
     
     batch = generate_bible_content(JUMLAH_VIDEO)

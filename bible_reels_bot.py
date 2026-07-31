@@ -5,7 +5,8 @@ import requests
 import urllib.parse
 import asyncio
 import edge_tts
-import google.generativeai as genai
+import gc
+from groq import Groq
 
 from moviepy import AudioFileClip, CompositeAudioClip, CompositeVideoClip, ColorClip, ImageClip, concatenate_videoclips, concatenate_audioclips
 from moviepy.audio.fx import MultiplyVolume
@@ -13,36 +14,69 @@ from PIL import Image, ImageDraw, ImageFont
 
 BASE_DIR = os.path.abspath(os.getcwd())
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-genai.configure(api_key=GEMINI_API_KEY)
+# --- KONFIGURASI GROQ API ---
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+groq_client = Groq(api_key=GROQ_API_KEY)
+
+# --- MANAJEMEN MEMORI (ANTI DUPLIKASI KONTEN) ---
+HISTORY_FILE = "history_verses.txt"
+
+def get_used_verses():
+    """Mengambil riwayat ayat yang sudah pernah dibuat agar AI tidak mengulanginya"""
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+        return [line.strip() for line in f.readlines() if line.strip()]
+
+def mark_verse_as_used(verse_ref):
+    """Menyimpan referensi ayat baru ke dalam memori bot"""
+    with open(HISTORY_FILE, 'a', encoding='utf-8') as f:
+        f.write(f"{verse_ref}\n")
 
 # ==========================================
-# 1. GEMINI AI: GENERATOR AYAT & RENUNGAN
+# 1. GROQ AI: GENERATOR AYAT & RENUNGAN
 # ==========================================
 def generate_bible_content(num_videos=1):
-    print(f"🕊️ Memohon hikmat Gemini AI untuk meracik {num_videos} renungan Firman Tuhan...")
+    print(f"🕊️ Memohon hikmat Groq Llama-3.3 untuk meracik {num_videos} renungan Firman Tuhan...")
+    
+    used_verses = get_used_verses()
+    history_context = "\n".join(used_verses[-25:]) if used_verses else "(Belum ada riwayat, buat topik bebas)"
+    
     prompt = f"""
     Bertindaklah sebagai Pendeta dan konten kreator rohani Kristen yang penuh karisma. 
     Buatlah {num_videos} naskah video pendek (Reels) berdasarkan ayat Alkitab dalam Bahasa Indonesia.
+    
+    ATURAN MUTLAK ANTI-DUPLIKASI: 
+    Dilarang keras membuat naskah dengan referensi ayat atau tema yang mirip dengan daftar ayat yang sudah pernah dibuat ini:
+    {history_context}
+    
     Gunakan pemisah '---' antar naskah. Format persis seperti ini:
     
-    AYAT: [Kutipan ayat Alkitab, misal: "Tuhan adalah gembalaku, takkan kekurangan aku." - Mazmur 23:1]
+    AYAT: [Kutipan ayat Alkitab beserta referensinya, misal: "Tuhan adalah gembalaku, takkan kekurangan aku." - Mazmur 23:1]
     RENUNGAN: [Renungan singkat yang sangat mendalam, menyentuh hati, dan menguatkan iman. Panjang 2-3 kalimat]
     CTA: [Ajakan interaksi, misal: Ketik "Amin" jika kamu percaya janji Tuhan!]
     PROMPT_GAMBAR: [Deskripsi bahasa Inggris untuk AI Gambar. Harus berisi: Cinematic portrait of Jesus Christ, highly detailed, photorealistic, cinematic lighting, 8k, divine atmosphere, holy light, [tambahkan detail latar sesuai ayat]]
     """
-    model = genai.GenerativeModel('gemini-3.5-flash')
+    
     raw_text = ""
     for attempt in range(3):
         try:
-            response = model.generate_content(prompt)
-            raw_text = response.text
+            chat_completion = groq_client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": "Anda adalah asisten AI rohani yang patuh pada format instruksi."},
+                    {"role": "user", "content": prompt}
+                ],
+                model="llama-3.3-70b-versatile",
+                temperature=0.7,
+                max_tokens=2048,
+            )
+            raw_text = chat_completion.choices[0].message.content
             break 
         except Exception as e:
-            print(f"⚠️ Error dari Google (Percobaan {attempt+1}/3): {e}")
-            time.sleep(65)
+            print(f"⚠️ Error Groq (Percobaan {attempt+1}/3): {e}")
+            time.sleep(15)
     else:
-        raise Exception("❌ Gagal total menghubungi Gemini AI.")
+        raise Exception("❌ Gagal total menghubungi Groq AI.")
 
     batch = []
     for i, chunk in enumerate(raw_text.split("---")):
@@ -50,7 +84,7 @@ def generate_bible_content(num_videos=1):
         lines = [line.strip() for line in chunk.strip().split("\n") if line.strip()]
         if not lines: continue
         
-        ayat, renungan, cta, prompt_gbr = "Yohanes 3:16", "Kasih Tuhan tanpa batas.", "Ketik Amin!", "Cinematic Jesus Christ, divine light, 8k"
+        ayat, renungan, cta, prompt_gbr = "Yohanes 3:16 - Karena begitu besar kasih Allah...", "Kasih Tuhan tanpa batas.", "Ketik Amin!", "Cinematic Jesus Christ, divine light, 8k"
         for line in lines:
             if line.startswith("AYAT:"): ayat = line.replace("AYAT:", "").strip()
             elif line.startswith("RENUNGAN:"): renungan = line.replace("RENUNGAN:", "").strip()
@@ -84,15 +118,25 @@ def generate_cinematic_jesus(prompt, output_filename):
     raise Exception("Gagal menghasilkan gambar dari AI.")
 
 # ==========================================
-# 3. EDGE-TTS NATIVE
+# 3. EDGE-TTS NATIVE (DENGAN PEMBERSIH BACAAN AYAT)
 # ==========================================
+def fix_verse_for_tts(verse_text):
+    """Mengubah format titik dua ':' pada referensi ayat agar dibaca 'ayat' oleh edge-tts,
+    mencegah pembacaan keliru menjadi penunjuk waktu (pukul).
+    """
+    tts_text = verse_text
+    if ":" in tts_text:
+        tts_text = tts_text.replace(":", " ayat ")
+    return tts_text
+
 async def _generate_audio_async(text, output_audio):
     communicate = edge_tts.Communicate(text, "id-ID-ArdiNeural", rate="-5%")
     await communicate.save(output_audio)
 
 def generate_edge_tts_voice(text, output_audio):
     print("🎙️ Merekam suara narator berwibawa (Edge-TTS Native)...")
-    asyncio.run(_generate_audio_async(text, output_audio))
+    clean_text = fix_verse_for_tts(text)
+    asyncio.run(_generate_audio_async(clean_text, output_audio))
     if not os.path.exists(output_audio) or os.path.getsize(output_audio) == 0:
         raise Exception(f"File audio {output_audio} gagal dibuat!")
     return output_audio
@@ -143,8 +187,8 @@ def create_static_verse(item, output_path, img_size=(1080, 1920)):
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    font = ImageFont.truetype(get_custom_font(), 30)
-    max_w = img_size[0] - 400 
+    font = ImageFont.truetype(get_custom_font(), 38)
+    max_w = img_size[0] - 250 
     lines = wrap_text_robust(item['ayat'], font, draw, max_w)
     
     y = 250 
@@ -152,15 +196,12 @@ def create_static_verse(item, output_path, img_size=(1080, 1920)):
         line = line.strip()
         if not line: continue
         
-        # MATEMATIKA MURNI: Cari letak X yang pas agar teks di tengah
         w = get_text_width(draw, line, font)
         x_pos = (img_size[0] - w) // 2 
         
-        # Gambar bayangan (Outline) di kiri-kanan-atas-bawah
         for ax, ay in [(-2,0),(2,0),(0,-2),(0,2),(-2,-2),(2,2),(-2,2),(2,-2)]:
             draw.text((x_pos+ax, y+ay), line, font=font, fill="black")
             
-        # Gambar teks emas
         draw.text((x_pos, y), line, font=font, fill="gold")
         y += font.size + 15
         
@@ -170,8 +211,8 @@ def create_static_verse(item, output_path, img_size=(1080, 1920)):
 def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
     """Efek Typewriter (Rata Tengah Sempurna)"""
     print("📝 Menggambar frame Typewriter Dinamis...")
-    font = ImageFont.truetype(get_custom_font(), 48)
-    max_w = img_size[0] - 250 
+    font = ImageFont.truetype(get_custom_font(), 44)
+    max_w = img_size[0] - 200 
     
     words = text.split()
     if not words: return None
@@ -196,7 +237,6 @@ def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
                 line = line.strip()
                 if not line: continue
                 
-                # MATEMATIKA MURNI: Cari letak X yang pas
                 w = get_text_width(draw, line, font)
                 x_pos = (img_size[0] - w) // 2
                 
@@ -255,7 +295,8 @@ def render_bible_video(img_bg_path, voice_path, item, output_video):
     
     try:
         video.close(); voice_clip.close(); final_audio.close()
-    except: pass
+    except Exception: 
+        pass
     
     return output_video
 
@@ -263,12 +304,12 @@ def render_bible_video(img_bg_path, voice_path, item, output_video):
 # 6. UPLOAD KE FACEBOOK REELS
 # ==========================================
 def upload_to_facebook(video_path, caption, index):
-    print(f"[{index}/5] 🚀 Mengunggah Firman Tuhan ke Facebook Reels...")
+    print(f"[{index}/1] 🚀 Mengunggah Firman Tuhan ke Facebook Reels...")
     page_id = os.environ.get("FB_PAGE_ID")
     access_token = os.environ.get("FB_ACCESS_TOKEN")
     
     init_res = requests.post(f"https://graph.facebook.com/v18.0/{page_id}/video_reels", 
-                             data={"upload_phase": "start", "access_token": access_token}).json()
+                           data={"upload_phase": "start", "access_token": access_token}).json()
     
     if "video_id" not in init_res:
         raise Exception(f"Ditolak oleh Facebook API! Balasan Meta: {init_res}")
@@ -288,7 +329,7 @@ def upload_to_facebook(video_path, caption, index):
     }).json()
     
     if pub_res.get("success"): 
-        print(f"[{index}/5] 🎉 BERHASIL DIUNGGAH KE FACEBOOK REELS!\n")
+        print(f"[{index}/1] 🎉 BERHASIL DIUNGGAH KE FACEBOOK REELS!\n")
     else: 
         raise Exception(f"Gagal Publikasi: {pub_res}")
 
@@ -321,6 +362,9 @@ if __name__ == "__main__":
             else:
                 raise Exception("File video hilang sebelum di-upload!")
             
+            mark_verse_as_used(item['ayat'][:30])
+            gc.collect()
+            
             if i < len(batch):
                 waktu_jeda = random.randint(60, 180)
                 print(f"⏳ Keamanan Anti-Spam aktif: Beristirahat selama {waktu_jeda} detik...\n")
@@ -328,5 +372,6 @@ if __name__ == "__main__":
                 
         except Exception as e:
             print(f"❌ Kesalahan pada video {i}: {e}\n")
+            gc.collect()
             
-    print("🎉 SEMUA TUGAS SELESAI! 5 VIDEO FIRMAN TUHAN TELAH BERHASIL DIBUAT DAN DIUNGGAH! 🎉")
+    print("🎉 SEMUA TUGAS SELESAI! FIRMAN TUHAN TELAH BERHASIL DIBUAT DAN DIUNGGAH! 🎉")

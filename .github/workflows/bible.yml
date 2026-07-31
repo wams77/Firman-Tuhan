@@ -2,8 +2,8 @@ name: Auto Bible Reels Bot
 
 on:
   schedule:
-    # Berjalan otomatis setiap hari pukul 06:00 WITA (22:00 UTC)
-    - cron: '0 22 * * *' 
+    # Berjalan otomatis dua kali sehari: Pukul 07:00 WITA (23:00 UTC) dan 19:00 WITA (11:00 UTC)
+    - cron: '0 23,11 * * *' 
   workflow_dispatch:
 
 permissions:
@@ -37,8 +37,9 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: |
-         python bible_reels_bot.py
+          python bible_reels_bot.py
 
       - name: Simpan Memori Bot (Anti-Duplikasi)
         run: |

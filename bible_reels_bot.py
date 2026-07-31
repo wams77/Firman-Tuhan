@@ -142,7 +142,7 @@ def generate_edge_tts_voice(text, output_audio):
     return output_audio
 
 # ==========================================
-# 4. TEKS ESTETIK (ANTI-OVERFLOW & CENTERING)
+# 4. TEKS ESTETIK (PERFECT CENTERING & ANTI-OVERFLOW)
 # ==========================================
 def get_custom_font():
     font_filename = os.path.join(BASE_DIR, "Montserrat-Black.ttf")
@@ -154,17 +154,18 @@ def get_custom_font():
     return font_filename
 
 def get_text_width(draw, text, font):
-    """Membaca lebar pixel teks yang kompatibel di SEMUA versi Pillow"""
+    """Membaca lebar pixel teks yang akurat di SEMUA versi Pillow"""
     try:
-        return draw.textlength(text, font=font)
+        bbox = draw.textbbox((0, 0), text, font=font)
+        return bbox[2] - bbox[0]
     except AttributeError:
         try:
-            return draw.textbbox((0, 0), text, font=font)[2]
+            return draw.textlength(text, font=font)
         except AttributeError:
             return draw.textsize(text, font=font)[0]
 
 def wrap_text_robust(text, font, draw, max_w):
-    """Pemotong baris ketat agar tidak melebar keluar layar"""
+    """Pemotong baris ketat agar teks terbungkus rapi di dalam margin"""
     lines = []
     paragraphs = text.split('\n')
     for paragraph in paragraphs:
@@ -183,13 +184,12 @@ def wrap_text_robust(text, font, draw, max_w):
     return lines
 
 def create_static_verse(item, output_path, img_size=(1080, 1920)):
-    """Ayat Alkitab Diam (Margin Aman Anti-Overflow)"""
+    """Ayat Alkitab Diam (100% Rata Tengah Sempurna & Aman)"""
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # Ukuran font disetel ideal dan max_w dipersempit (margin 300px total)
     font = ImageFont.truetype(get_custom_font(), 34)
-    max_w = img_size[0] - 300  
+    max_w = img_size[0] - 300  # Margin kiri-kanan masing-masing 150px
     lines = wrap_text_robust(item['ayat'], font, draw, max_w)
     
     y = 250 
@@ -198,6 +198,7 @@ def create_static_verse(item, output_path, img_size=(1080, 1920)):
         if not line: continue
         
         w = get_text_width(draw, line, font)
+        # PERHITUNGAN PRESISI: Posisi X persis di tengah layar (1080)
         x_pos = (img_size[0] - w) // 2 
         
         for ax, ay in [(-2,0),(2,0),(0,-2),(0,2),(-2,-2),(2,2),(-2,2),(2,-2)]:
@@ -210,10 +211,10 @@ def create_static_verse(item, output_path, img_size=(1080, 1920)):
     return output_path
 
 def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
-    """Efek Typewriter (Margin Aman Anti-Overflow)"""
+    """Efek Typewriter (100% Rata Tengah Sempurna & Aman)"""
     print("📝 Menggambar frame Typewriter Dinamis...")
     font = ImageFont.truetype(get_custom_font(), 40)
-    max_w = img_size[0] - 280  # Margin kiri-kanan lebih lebar agar aman di layar ponsel
+    max_w = img_size[0] - 280  # Margin aman anti-keluar layar
     
     words = text.split()
     if not words: return None
@@ -239,6 +240,7 @@ def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
                 if not line: continue
                 
                 w = get_text_width(draw, line, font)
+                # PERHITUNGAN PRESISI: Posisi X persis di tengah layar
                 x_pos = (img_size[0] - w) // 2
                 
                 for ax, ay in [(-2,0),(2,0),(0,-2),(0,2),(-2,-2),(2,2),(-2,2),(2,-2)]:

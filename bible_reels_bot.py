@@ -143,8 +143,8 @@ def create_static_verse(item, output_path, img_size=(1080, 1920)):
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    font = ImageFont.truetype(get_custom_font(), 40)
-    max_w = img_size[0] - 300 
+    font = ImageFont.truetype(get_custom_font(), 30)
+    max_w = img_size[0] - 400 
     lines = wrap_text_robust(item['ayat'], font, draw, max_w)
     
     y = 250 

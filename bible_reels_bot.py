@@ -8,6 +8,7 @@ import gc
 from groq import Groq
 from moviepy import (
     AudioFileClip,
+    VideoFileClip,
     CompositeVideoClip,
     ColorClip,
     ImageClip,
@@ -38,9 +39,9 @@ def mark_verse_as_used(verse_ref):
     with open(HISTORY_FILE, 'a', encoding='utf-8') as f:
         f.write(f"{verse_ref}\n")
 
-# --- 1. GROQ AI: GENERATOR AYAT ALKITAB & RENUNGAN ---
+# --- 1. GROQ AI: GENERATOR AYAT ALKITAB & PEXELS QUERY ---
 def generate_dynamic_content(num_videos=2):
-    print(f"🕊️ Meminta Groq Llama-3.3 meracik {num_videos} naskah Firman Tuhan & Renungan...")
+    print(f"🕊️ Meminta Groq Llama-3.3 meracik {num_videos} naskah Firman Tuhan & kueri video Pexels...")
     
     used_verses = get_used_verses()
     history_context = "\n".join(used_verses[-25:]) if used_verses else "(Belum ada riwayat, buat topik bebas)"
@@ -59,7 +60,7 @@ def generate_dynamic_content(num_videos=2):
     AYAT: [Isi ayat Alkitab yang menyentuh hati dan relevan]
     RENUNGAN: [2-3 kalimat renungan singkat yang menguatkan iman dan mendalam tentang kasih Tuhan]
     CTA: [Ajakan interaksi singkat, contoh: Tulis 'Amin' di komentar jika kamu percaya.]
-    PROMPT_GAMBAR: [Deskripsi bahasa Inggris untuk AI Gambar latar belakang rohani yang megah, misal: "Cinematic majestic light breaking through dark clouds, divine atmosphere, 8k"]
+    PEXELS_QUERY: [Kata kunci bahasa Inggris untuk mencari video background rohani/tenang di Pexels, contoh: "peaceful mountain sunrise cinematic drone", "calm ocean waves sunset cinematic", "foggy pine forest moody cinematic"]
     """
     
     raw_text = ""
@@ -92,14 +93,14 @@ def generate_dynamic_content(num_videos=2):
         ayat = "Janganlah takut, sebab Aku menyertai engkau."
         renungan = "Tuhan tidak pernah meninggalkanmu berjalan sendirian."
         cta = "Ketik 'Amin' di komentar."
-        prompt_gambar = "Cinematic majestic divine light, 8k"
+        pexels_query = "peaceful mountain sunrise cinematic drone"
         
         for line in lines:
             if line.startswith("REF:"): ref = line.replace("REF:", "").strip()
             elif line.startswith("AYAT:"): ayat = line.replace("AYAT:", "").strip()
             elif line.startswith("RENUNGAN:"): renungan = line.replace("RENUNGAN:", "").strip()
             elif line.startswith("CTA:"): cta = line.replace("CTA:", "").strip()
-            elif line.startswith("PROMPT_GAMBAR:"): prompt_gambar = line.replace("PROMPT_GAMBAR:", "").strip()
+            elif line.startswith("PEXELS_QUERY:"): pexels_query = line.replace("PEXELS_QUERY:", "").strip()
                 
         batch.append({
             "id": f"BIBLE_{int(time.time())}_{i}",
@@ -107,7 +108,7 @@ def generate_dynamic_content(num_videos=2):
             "ayat": ayat,
             "renungan": renungan,
             "cta": cta,
-            "prompt_gambar": prompt_gambar
+            "pexels_query": pexels_query
         })
         
     print(f"✅ Berhasil meracik {len(batch)} Naskah Firman Tuhan Unik!")
@@ -131,22 +132,45 @@ def get_custom_font():
             raise Exception(f"Gagal mengunduh font. Status Code: {r.status_code}")
     return os.path.abspath(font_filename)
 
-# --- 2. POLLINATIONS AI: GENERATOR GAMBAR LATAR BELAKANG ---
-def generate_cinematic_background(prompt, output_filename):
-    print(f"🎨 Melukis latar sinematik dengan Pollinations AI: '{prompt[:50]}...'")
-    full_prompt = f"{prompt}, vertical 9:16 aspect ratio, dramatic lighting, masterpiece, trending on artstation"
-    encoded_prompt = urllib.parse.quote(full_prompt)
-    seed = random.randint(1, 999999)
-    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1920&nologo=true&seed={seed}"
+# --- 2. PEXELS VIDEO DOWNLOADER DENGAN CADANGAN ---
+def download_pexels_video(query, output_filename):
+    print(f"🎬 Mencari video latar rohani di Pexels untuk: '{query}'...")
+    api_key = os.environ.get("PEXELS_API_KEY")
+    headers = {"Authorization": api_key}
     
-    response = requests.get(url, timeout=30)
-    if response.status_code == 200:
+    url = f"https://api.pexels.com/videos/search?query={urllib.parse.quote(query)}&orientation=portrait&per_page=5"
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=15).json()
+        if "videos" in response and len(response["videos"]) > 0:
+            video_obj = random.choice(response["videos"])
+            video_files = video_obj["video_files"]
+            hd_file = next((v for v in video_files if v["quality"] == "hd"), video_files[0])
+            video_url = hd_file["link"]
+            
+            vid_data = requests.get(video_url, timeout=30).content
+            with open(output_filename, 'wb') as f:
+                f.write(vid_data)
+                
+            if os.path.exists(output_filename) and os.path.getsize(output_filename) > 50000:
+                print("✅ Stok video Pexels berhasil diunduh dan divalidasi!")
+                return output_filename
+    except Exception as e:
+        print(f"⚠️ Peringatan unduhan Pexels: {e}")
+
+    print("⚠️ Menggunakan video latar cadangan universal yang tenang...")
+    fallback_url = "https://api.pexels.com/videos/search?query=peaceful+nature+sunset+drone&orientation=portrait&per_page=1"
+    fallback_res = requests.get(fallback_url, headers=headers).json()
+    
+    if "videos" in fallback_res and len(fallback_res["videos"]) > 0:
+        video_obj = fallback_res["videos"][0]
+        hd_file = video_obj["video_files"][0]
+        vid_data = requests.get(hd_file["link"], timeout=30).content
         with open(output_filename, 'wb') as f:
-            f.write(response.content)
-        if os.path.exists(output_filename) and os.path.getsize(output_filename) > 10000:
-            print("✅ Gambar latar sinematik berhasil dilukis!")
-            return output_filename
-    raise Exception("Gagal menghasilkan gambar latar dari Pollinations AI.")
+            f.write(vid_data)
+        return output_filename
+        
+    raise Exception("Gagal total mengunduh video dari Pexels API.")
 
 # --- 3. PENGUBAH FORMAT AYAT & AI NEURAL VOICE ---
 def fix_verse_for_tts(ref_text):
@@ -170,7 +194,7 @@ def generate_ai_voice(full_text, index, output_audio):
     subprocess.run(cmd, check=True)
     return output_audio
 
-# --- 4. TEXT OVERLAY GENERATOR (LAYOUT RAPI, JARAK AMAN & TIDAK BERTUMPUK) ---
+# --- 4. TEXT OVERLAY GENERATOR (MAKSIMAL 3 KATA PER BARIS & RATA TENGAH) ---
 def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -182,7 +206,6 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
     font_cta = ImageFont.truetype(font_path, 32)
     
     def chunk_text_by_word_count(text, words_per_line=3):
-        """Memotong kalimat secara otomatis setiap maksimal 3 kata per baris"""
         words = text.split()
         lines = []
         for i in range(0, len(words), words_per_line):
@@ -195,10 +218,8 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
     lines_renungan = chunk_text_by_word_count(item['renungan'], words_per_line=3)
     lines_cta = chunk_text_by_word_count(f"💬 {item['cta']}", words_per_line=3)
     
-    # Posisi awal vertikal ditaruh di tengah atas agar memiliki ruang luas ke bawah
     y = 280  
 
-    # 1. Render Referensi Kitab (Warna Emas/Gold - Rata Tengah)
     for line in lines_ref:
         try:
             w = draw.textlength(line, font=font_ref)
@@ -210,9 +231,8 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
         draw.text((x, y), line, font=font_ref, fill="#FFD700")
         y += 65
 
-    y += 20  # Jarak aman pemisah
+    y += 20  
 
-    # 2. Render Ayat Alkitab (Warna Putih - Rata Tengah)
     for line in lines_ayat:
         try:
             w = draw.textlength(line, font=font_ayat)
@@ -224,9 +244,8 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
         draw.text((x, y), line, font=font_ayat, fill="white")
         y += 48
 
-    y += 30  # Jarak aman pemisah ke renungan
+    y += 30  
 
-    # 3. Render Renungan Singkat (Warna Silver - Rata Tengah)
     for line in lines_renungan:
         try:
             w = draw.textlength(line, font=font_renungan)
@@ -238,7 +257,6 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
         draw.text((x, y), line, font=font_renungan, fill="#E0E0E0")
         y += 44
 
-    # 4. Render CTA (Warna Cyan di Bagian Bawah - Rata Tengah)
     y_cta = 1500
     for line in lines_cta:
         try:
@@ -254,14 +272,14 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
     img.save(output_path)
     return output_path
 
-# --- 5. EDITOR VIDEO UTAMA ---
-def render_short_video(bg_image_path, audio_path, item, output_video, index, bg_music_path=None):
-    print(f"[{index}/2] 🎬 Merakit video Firman Tuhan dengan tata letak rapi...")
+# --- 5. EDITOR VIDEO UTAMA (MENGGUNAKAN VIDEO PEXELS & UKURAN 9:16) ---
+def render_short_video(bg_video_path, audio_path, item, output_video, index, bg_music_path=None):
+    print(f"[{index}/2] 🎬 Merakit video latar Pexels, Teks & Musik...")
     
     if not os.path.exists(audio_path) or os.path.getsize(audio_path) < 1000:
         raise Exception(f"File audio {audio_path} tidak valid atau kosong!")
-    if not os.path.exists(bg_image_path) or os.path.getsize(bg_image_path) < 10000:
-        raise Exception(f"File gambar latar {bg_image_path} tidak valid atau kosong!")
+    if not os.path.exists(bg_video_path) or os.path.getsize(bg_video_path) < 50000:
+        raise Exception(f"File video latar {bg_video_path} tidak valid atau kosong!")
 
     voice_audio = AudioFileClip(audio_path)
     video_duration = voice_audio.duration + 1.5 
@@ -273,7 +291,15 @@ def render_short_video(bg_image_path, audio_path, item, output_video, index, bg_
     else:
         final_audio = voice_audio
     
-    visual_clip = ImageClip(bg_image_path).with_duration(video_duration)
+    video_clip = VideoFileClip(bg_video_path)
+    
+    if video_clip.duration < video_duration:
+        n_loops = int(video_duration // video_clip.duration) + 1
+        video_clip = concatenate_videoclips([video_clip] * n_loops)
+        
+    video_clip = video_clip.subclipped(0, video_duration)
+    video_clip = video_clip.resized(height=1920).cropped(x_center=video_clip.w/2, y_center=video_clip.h/2, width=1080, height=1920)
+    
     overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.55).with_duration(video_duration)
     
     txt_img_path = os.path.join(BASE_DIR, f"text_overlay_temp_{index}.png")
@@ -287,7 +313,7 @@ def render_short_video(bg_image_path, audio_path, item, output_video, index, bg_
     progress_bar = ColorClip(size=(1080, 15), color=(255, 215, 0)).with_duration(video_duration)
     progress_bar = progress_bar.with_position(lambda t: (int(-1080 + (1080 * (t / video_duration))), 'bottom'))
 
-    video = CompositeVideoClip([visual_clip, overlay, txt_clip, progress_bar]).with_audio(final_audio)
+    video = CompositeVideoClip([video_clip, overlay, txt_clip, progress_bar], size=(1080, 1920)).with_audio(final_audio)
     
     try:
         video.write_videofile(
@@ -307,7 +333,7 @@ def render_short_video(bg_image_path, audio_path, item, output_video, index, bg_
     try:
         video.close()
         voice_audio.close()
-        visual_clip.close()
+        video_clip.close()
         if os.path.exists(txt_img_path):
             os.remove(txt_img_path)
     except Exception:
@@ -391,15 +417,15 @@ if __name__ == "__main__":
             clean_spoken_ref = fix_verse_for_tts(item['ref'])
             suara_naskah = f"{clean_spoken_ref} \"{item['ayat']}\" {item['renungan']} {item['cta']}"
             
-            bg_image_file = os.path.join(BASE_DIR, f"bible_bg_{i}.jpg")
+            video_bg_file = os.path.join(BASE_DIR, f"stock_bg_{i}.mp4")
             audio_file = os.path.join(BASE_DIR, f"voice_bible_{i}.mp3")
             video_file = os.path.join(BASE_DIR, f"final_reels_{i}.mp4")
             
             caption = f"📖 Renungan Harian Firman Tuhan: {item['ref']}\n\n\"{item['ayat']}\"\n\n{item['renungan']}\n\n{item['cta']}\n\n#firmantuhan #renunganharian #ayatalkitab #rohanikristen #saatteduh #reels"
             
-            generate_cinematic_background(item['prompt_gambar'], bg_image_file)
+            download_pexels_video(item['pexels_query'], video_bg_file)
             generate_ai_voice(suara_naskah, i, audio_file)
-            render_short_video(bg_image_file, audio_file, item, video_file, i, bg_music_file)
+            render_short_video(video_bg_file, audio_file, item, video_file, i, bg_music_file)
             
             if os.path.exists(video_file) and os.path.getsize(video_file) > 50000:
                 upload_to_facebook(video_file, caption, i)

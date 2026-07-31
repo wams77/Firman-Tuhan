@@ -118,30 +118,36 @@ def get_custom_font():
             f.write(r.content)
     return font_filename
 
-def wrap_text_safe(text, font, draw, max_w):
-    """Fungsi pembantu yang aman untuk memotong teks per baris"""
-    words = text.split()
-    lines, curr = [], []
-    for w in words:
-        curr.append(w)
-        test_line = " ".join(curr)
+def wrap_text_robust(text, font, draw, max_w):
+    """
+    Algoritma profesional untuk memotong teks. 
+    Menjamin tidak ada 1 kata pun yang melewati batas max_w (Margin Aman).
+    """
+    lines = []
+    paragraphs = text.split('\n')
+    for paragraph in paragraphs:
+        words = paragraph.split()
+        if not words:
+            continue
         
-        try:
-            w_test = draw.textlength(test_line, font=font)
-        except AttributeError:
-            bbox = draw.textbbox((0,0), test_line, font=font)
-            w_test = bbox[2] - bbox[0]
+        current_line = words[0]
+        for word in words[1:]:
+            test_line = f"{current_line} {word}"
             
-        if w_test > max_w:
-            if len(curr) > 1:
-                curr.pop()
-                lines.append(" ".join(curr))
-                curr = [w]
+            # Hitung akurat lebar teks menggunakan Pillow
+            try:
+                w_test = draw.textlength(test_line, font=font)
+            except AttributeError:
+                w_test = draw.textbbox((0, 0), test_line, font=font)[2]
+                
+            if w_test <= max_w:
+                current_line = test_line
             else:
-                lines.append(" ".join(curr))
-                curr = []
-    if curr:
-        lines.append(" ".join(curr))
+                # Jika tes baris melewati batas, turunkan kata ke baris baru
+                lines.append(current_line)
+                current_line = word
+                
+        lines.append(current_line)
     return lines
 
 def create_static_verse(item, output_path, img_size=(1080, 1920)):
@@ -149,25 +155,26 @@ def create_static_verse(item, output_path, img_size=(1080, 1920)):
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # PERMINTAAN USER: UKURAN FONT DIUBAH MENJADI 13
-    UKURAN_FONT = 35 
+    # UKURAN FONT: 40 (Ideal untuk resolusi 1080x1920 agar terbaca jelas)
+    UKURAN_FONT = 40 
     font = ImageFont.truetype(get_custom_font(), UKURAN_FONT)
     
+    # MARGIN AMAN: 1080 - 300 = 780px lebar maksimal teks. Dijamin tidak menabrak tepi.
     max_w = img_size[0] - 300 
-    lines = wrap_text_safe(item['ayat'], font, draw, max_w)
+    lines = wrap_text_robust(item['ayat'], font, draw, max_w)
     
-    y = 280 
-    x_center = img_size[0] // 2  # Titik paku tepat di tengah kanvas (540)
+    y = 250 
+    x_center = img_size[0] // 2  # Paku presisi di titik tengah (540)
     
     for line in lines:
-        line = line.strip() # Menghapus spasi siluman
+        line = line.strip()
         
-        # Menggunakan anchor="ma" untuk 100% dijamin rata tengah
-        for ax, ay in [(-1,0),(1,0),(0,-1),(0,1),(-1,-1),(1,1),(-1,1),(1,-1)]:
+        # Efek outline hitam (stroke) agar teks tebal dan terbaca di background apapun
+        for ax, ay in [(-2,0),(2,0),(0,-2),(0,2),(-2,-2),(2,2),(-2,2),(2,-2)]:
             draw.text((x_center+ax, y+ay), line, font=font, fill="black", anchor="ma")
             
         draw.text((x_center, y), line, font=font, fill="gold", anchor="ma")
-        y += font.size + 15
+        y += font.size + 15  # Jarak antar baris
         
     img.save(output_path)
     return output_path
@@ -176,20 +183,23 @@ def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
     """Membuat efek Typewriter Subtitle (muncul kata per kata)"""
     print("📝 Menggambar frame Typewriter Dinamis...")
     
-    # PERMINTAAN USER: UKURAN FONT DIUBAH MENJADI 13
-    UKURAN_FONT = 35
+    # UKURAN FONT RENUNGAN: 48 (Lebih besar sedikit agar mencolok)
+    UKURAN_FONT = 48
     font = ImageFont.truetype(get_custom_font(), UKURAN_FONT)
+    
+    # MARGIN AMAN: 1080 - 250 = 830px lebar maksimal teks.
     max_w = img_size[0] - 250 
     
     words = text.split()
     if not words: return None
     
-    chunk_size = 5
+    # Mengeluarkan 4 kata per frame agar layar tidak sesak
+    chunk_size = 4
     chunks = [words[i:i+chunk_size] for i in range(0, len(words), chunk_size)]
     time_per_word = audio_duration / len(words)
     clips = []
     
-    x_center = img_size[0] // 2 # Titik paku tepat di tengah kanvas
+    x_center = img_size[0] // 2 # Paku di titik tengah kanvas
     
     for i, chunk_words in enumerate(chunks):
         for j in range(1, len(chunk_words) + 1):
@@ -198,7 +208,7 @@ def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
             img = Image.new("RGBA", img_size, (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
             
-            current_lines = wrap_text_safe(current_text, font, draw, max_w)
+            current_lines = wrap_text_robust(current_text, font, draw, max_w)
             
             total_h = len(current_lines) * (font.size + 15)
             y = 1100 - (total_h // 2)
@@ -206,7 +216,8 @@ def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
             for line in current_lines:
                 line = line.strip()
                 
-                for ax, ay in [(-1,0),(1,0),(0,-1),(0,1),(-1,-1),(1,1),(-1,1),(1,-1)]:
+                # Efek outline (stroke) untuk subtitle
+                for ax, ay in [(-2,0),(2,0),(0,-2),(0,2),(-2,-2),(2,2),(-2,2),(2,-2)]:
                     draw.text((x_center+ax, y+ay), line, font=font, fill="black", anchor="ma")
                     
                 draw.text((x_center, y), line, font=font, fill="white", anchor="ma")

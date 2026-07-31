@@ -118,33 +118,50 @@ def get_custom_font():
             f.write(r.content)
     return font_filename
 
-def wrap_text(text, font, draw, max_w):
-    """Fungsi pembantu untuk memotong teks agar tidak keluar batas layar"""
+def wrap_text_safe(text, font, draw, max_w):
+    """Fungsi pembantu yang aman untuk memotong teks (Mendukung Pillow lawas & baru)"""
     words = text.split()
     lines, curr = [], ""
     for w in words:
         test = f"{curr} {w}".strip()
-        if draw.textlength(test, font=font) <= max_w: 
+        
+        # Perhitungan lebar teks yang aman dari error
+        try:
+            w_test = draw.textlength(test, font=font)
+        except AttributeError:
+            w_test = draw.textbbox((0,0), test, font=font)[2]
+            
+        if w_test <= max_w: 
             curr = test
         else: 
-            lines.append(curr)
+            if curr: lines.append(curr)
             curr = w
     if curr: lines.append(curr)
     return lines
 
 def create_static_verse(item, output_path, img_size=(1080, 1920)):
-    """Membuat Ayat Alkitab yang diam (statis) di bagian atas video"""
+    """Membuat Ayat Alkitab yang diam (statis) dengan SAFE ZONE yang agresif"""
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    font = ImageFont.truetype(get_custom_font(), 45)
-    max_w = img_size[0] - 200 # Margin aman
+    # PERBAIKAN 1: Ukuran font Ayat diperkecil drastis ke 40 agar lebih fleksibel
+    font = ImageFont.truetype(get_custom_font(), 40)
     
-    lines = wrap_text(item['ayat'], font, draw, max_w)
-    y = 250 # Posisi agak ke atas
+    # PERBAIKAN 2: SAFE ZONE AGRESIF (Margin kiri-kanan masing-masing 180px!)
+    # Ini memastikan teks dijamin tidak terpotong lagi.
+    max_w = img_size[0] - 360 
+    
+    lines = wrap_text_safe(item['ayat'], font, draw, max_w)
+    
+    # PERBAIKAN 3: Posisi Y diturunkan sedikit agar tidak tertutup Phone UI atas
+    y = 280 
     
     for line in lines:
-        w = draw.textlength(line, font=font)
+        try:
+            w = draw.textlength(line, font=font)
+        except AttributeError:
+            w = draw.textbbox((0,0), line, font=font)[2]
+            
         x = (img_size[0] - w) // 2
         for ax, ay in [(-3,0),(3,0),(0,-3),(0,3),(-2,-2),(2,2),(-2,2),(2,-2)]:
             draw.text((x+ax, y+ay), line, font=font, fill="black")
@@ -155,19 +172,20 @@ def create_static_verse(item, output_path, img_size=(1080, 1920)):
     return output_path
 
 def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
-    """Membuat efek Typewriter Subtitle (muncul kata per kata) untuk Voice Over"""
+    """Membuat efek Typewriter Subtitle (muncul kata per kata) mengikuti audio"""
     print("📝 Menggambar frame Typewriter Dinamis...")
-    font = ImageFont.truetype(get_custom_font(), 50)
-    max_w = img_size[0] - 200
+    
+    # PERBAIKAN 4: Font Renungan juga disesuaikan ke Safe Zone yang lebih ketat
+    font = ImageFont.truetype(get_custom_font(), 48)
+    max_w = img_size[0] - 280 # Reels padding (140px per sisi)
     
     words = text.split()
     if not words: return None
     
-    # Kelompokkan teks per 5 kata agar tidak menumpuk memenuhi layar
+    # Kelompokkan teks per 5 kata
     chunk_size = 5
     chunks = [words[i:i+chunk_size] for i in range(0, len(words), chunk_size)]
     
-    # Waktu dibagi rata berdasarkan jumlah kata agar selaras dengan suara
     time_per_word = audio_duration / len(words)
     clips = []
     
@@ -178,14 +196,17 @@ def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
             img = Image.new("RGBA", img_size, (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
             
-            current_lines = wrap_text(current_text, font, draw, max_w)
+            current_lines = wrap_text_safe(current_text, font, draw, max_w)
             
-            # Posisikan teks di tengah-bawah layar
             total_h = len(current_lines) * (font.size + 15)
             y = 1100 - (total_h // 2)
             
             for line in current_lines:
-                w = draw.textlength(line, font=font)
+                try:
+                    w = draw.textlength(line, font=font)
+                except AttributeError:
+                    w = draw.textbbox((0,0), line, font=font)[2]
+                    
                 x = (img_size[0] - w) // 2
                 for ax, ay in [(-3,0),(3,0),(0,-3),(0,3),(-2,-2),(2,2),(-2,2),(2,-2)]:
                     draw.text((x+ax, y+ay), line, font=font, fill="black")
@@ -227,7 +248,7 @@ def render_bible_video(img_bg_path, voice_path, item, output_video):
     visual_clip = ImageClip(img_bg_path).with_duration(video_duration)
     overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.55).with_duration(video_duration)
     
-    # 1. Ayat Statis (Diam di atas)
+    # 1. Ayat Statis (Diam di atas, SEKARANG AMAN)
     verse_path = create_static_verse(item, os.path.join(BASE_DIR, "verse_temp.png"))
     verse_clip = ImageClip(verse_path).with_duration(video_duration)
     
@@ -238,7 +259,7 @@ def render_bible_video(img_bg_path, voice_path, item, output_video):
     subs_clip = create_typewriter_subtitles(text_to_type, voice_clip.duration)
     
     if subs_clip:
-        subs_clip = subs_clip.with_start(0.5) # Mulai bersamaan dengan Voice Over
+        subs_clip = subs_clip.with_start(0.5) 
         video_layers.append(subs_clip)
     
     video = CompositeVideoClip(video_layers).with_audio(final_audio)

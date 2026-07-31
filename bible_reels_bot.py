@@ -7,14 +7,12 @@ import asyncio
 import edge_tts
 import google.generativeai as genai
 
-# Impor MoviePy 2.0 beserta modul Efek Volume-nya
 from moviepy import AudioFileClip, CompositeAudioClip, CompositeVideoClip, ColorClip, ImageClip, concatenate_videoclips, concatenate_audioclips
 from moviepy.audio.fx import MultiplyVolume
 from PIL import Image, ImageDraw, ImageFont
 
 BASE_DIR = os.path.abspath(os.getcwd())
 
-# Konfigurasi Google AI Studio (Gemini API)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
@@ -23,7 +21,6 @@ genai.configure(api_key=GEMINI_API_KEY)
 # ==========================================
 def generate_bible_content(num_videos=1):
     print(f"🕊️ Memohon hikmat Gemini AI untuk meracik {num_videos} renungan Firman Tuhan...")
-    
     prompt = f"""
     Bertindaklah sebagai Pendeta dan konten kreator rohani Kristen yang penuh karisma. 
     Buatlah {num_videos} naskah video pendek (Reels) berdasarkan ayat Alkitab dalam Bahasa Indonesia.
@@ -34,22 +31,18 @@ def generate_bible_content(num_videos=1):
     CTA: [Ajakan interaksi, misal: Ketik "Amin" jika kamu percaya janji Tuhan!]
     PROMPT_GAMBAR: [Deskripsi bahasa Inggris untuk AI Gambar. Harus berisi: Cinematic portrait of Jesus Christ, highly detailed, photorealistic, cinematic lighting, 8k, divine atmosphere, holy light, [tambahkan detail latar sesuai ayat]]
     """
-    
     model = genai.GenerativeModel('gemini-3.5-flash')
-    
     raw_text = ""
-    max_retries = 3
-    for attempt in range(max_retries):
+    for attempt in range(3):
         try:
             response = model.generate_content(prompt)
             raw_text = response.text
             break 
         except Exception as e:
-            print(f"⚠️ Error dari Google (Percobaan {attempt+1}/{max_retries}): {e}")
-            if attempt < max_retries - 1:
-                time.sleep(65)
-            else:
-                raise Exception(f"❌ Gagal total menghubungi Gemini AI: {e}")
+            print(f"⚠️ Error dari Google (Percobaan {attempt+1}/3): {e}")
+            time.sleep(65)
+    else:
+        raise Exception("❌ Gagal total menghubungi Gemini AI.")
 
     batch = []
     for i, chunk in enumerate(raw_text.split("---")):
@@ -83,7 +76,6 @@ def generate_cinematic_jesus(prompt, output_filename):
     encoded_prompt = urllib.parse.quote(full_prompt)
     seed = random.randint(1, 999999)
     url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1920&nologo=true&seed={seed}"
-    
     response = requests.get(url)
     if response.status_code == 200:
         with open(output_filename, 'wb') as f:
@@ -92,7 +84,7 @@ def generate_cinematic_jesus(prompt, output_filename):
     raise Exception("Gagal menghasilkan gambar dari AI.")
 
 # ==========================================
-# 3. EDGE-TTS NATIVE (SUARA BERWIBAWA)
+# 3. EDGE-TTS NATIVE
 # ==========================================
 async def _generate_audio_async(text, output_audio):
     communicate = edge_tts.Communicate(text, "id-ID-ArdiNeural", rate="-5%")
@@ -106,100 +98,88 @@ def generate_edge_tts_voice(text, output_audio):
     return output_audio
 
 # ==========================================
-# 4. TEKS ESTETIK (STATIC + TYPEWRITER)
+# 4. TEKS ESTETIK (MANUAL CENTERING MATH)
 # ==========================================
 def get_custom_font():
     font_filename = os.path.join(BASE_DIR, "Montserrat-Black.ttf")
     if not os.path.exists(font_filename) or os.path.getsize(font_filename) < 100000:
-        print("📥 Mengunduh Font Estetik...")
         url = "https://raw.githubusercontent.com/JulietaUla/Montserrat/master/fonts/ttf/Montserrat-Black.ttf"
         r = requests.get(url)
         with open(font_filename, 'wb') as f:
             f.write(r.content)
     return font_filename
 
+def get_text_width(draw, text, font):
+    """Membaca lebar pixel teks yang kompatibel di SEMUA versi Pillow"""
+    try:
+        return draw.textlength(text, font=font)
+    except AttributeError:
+        try:
+            return draw.textbbox((0, 0), text, font=font)[2]
+        except AttributeError:
+            return draw.textsize(text, font=font)[0]
+
 def wrap_text_robust(text, font, draw, max_w):
-    """
-    Algoritma profesional untuk memotong teks. 
-    Menjamin tidak ada 1 kata pun yang melewati batas max_w (Margin Aman).
-    """
+    """Pemotong baris yang anti-meleset"""
     lines = []
     paragraphs = text.split('\n')
     for paragraph in paragraphs:
         words = paragraph.split()
-        if not words:
-            continue
-        
+        if not words: continue
         current_line = words[0]
         for word in words[1:]:
             test_line = f"{current_line} {word}"
-            
-            # Hitung akurat lebar teks menggunakan Pillow
-            try:
-                w_test = draw.textlength(test_line, font=font)
-            except AttributeError:
-                w_test = draw.textbbox((0, 0), test_line, font=font)[2]
-                
+            w_test = get_text_width(draw, test_line, font)
             if w_test <= max_w:
                 current_line = test_line
             else:
-                # Jika tes baris melewati batas, turunkan kata ke baris baru
                 lines.append(current_line)
                 current_line = word
-                
         lines.append(current_line)
     return lines
 
 def create_static_verse(item, output_path, img_size=(1080, 1920)):
-    """Membuat Ayat Alkitab yang diam (statis) tepat di tengah layar"""
+    """Ayat Alkitab Diam (Rata Tengah Sempurna)"""
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # UKURAN FONT: 40 (Ideal untuk resolusi 1080x1920 agar terbaca jelas)
-    UKURAN_FONT = 40 
-    font = ImageFont.truetype(get_custom_font(), UKURAN_FONT)
-    
-    # MARGIN AMAN: 1080 - 300 = 780px lebar maksimal teks. Dijamin tidak menabrak tepi.
+    font = ImageFont.truetype(get_custom_font(), 40)
     max_w = img_size[0] - 300 
     lines = wrap_text_robust(item['ayat'], font, draw, max_w)
     
     y = 250 
-    x_center = img_size[0] // 2  # Paku presisi di titik tengah (540)
-    
     for line in lines:
         line = line.strip()
+        if not line: continue
         
-        # Efek outline hitam (stroke) agar teks tebal dan terbaca di background apapun
+        # MATEMATIKA MURNI: Cari letak X yang pas agar teks di tengah
+        w = get_text_width(draw, line, font)
+        x_pos = (img_size[0] - w) // 2 
+        
+        # Gambar bayangan (Outline) di kiri-kanan-atas-bawah
         for ax, ay in [(-2,0),(2,0),(0,-2),(0,2),(-2,-2),(2,2),(-2,2),(2,-2)]:
-            draw.text((x_center+ax, y+ay), line, font=font, fill="black", anchor="ma")
+            draw.text((x_pos+ax, y+ay), line, font=font, fill="black")
             
-        draw.text((x_center, y), line, font=font, fill="gold", anchor="ma")
-        y += font.size + 15  # Jarak antar baris
+        # Gambar teks emas
+        draw.text((x_pos, y), line, font=font, fill="gold")
+        y += font.size + 15
         
     img.save(output_path)
     return output_path
 
 def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
-    """Membuat efek Typewriter Subtitle (muncul kata per kata)"""
+    """Efek Typewriter (Rata Tengah Sempurna)"""
     print("📝 Menggambar frame Typewriter Dinamis...")
-    
-    # UKURAN FONT RENUNGAN: 48 (Lebih besar sedikit agar mencolok)
-    UKURAN_FONT = 48
-    font = ImageFont.truetype(get_custom_font(), UKURAN_FONT)
-    
-    # MARGIN AMAN: 1080 - 250 = 830px lebar maksimal teks.
+    font = ImageFont.truetype(get_custom_font(), 48)
     max_w = img_size[0] - 250 
     
     words = text.split()
     if not words: return None
     
-    # Mengeluarkan 4 kata per frame agar layar tidak sesak
     chunk_size = 4
     chunks = [words[i:i+chunk_size] for i in range(0, len(words), chunk_size)]
     time_per_word = audio_duration / len(words)
     clips = []
-    
-    x_center = img_size[0] // 2 # Paku di titik tengah kanvas
     
     for i, chunk_words in enumerate(chunks):
         for j in range(1, len(chunk_words) + 1):
@@ -209,18 +189,20 @@ def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
             draw = ImageDraw.Draw(img)
             
             current_lines = wrap_text_robust(current_text, font, draw, max_w)
-            
             total_h = len(current_lines) * (font.size + 15)
             y = 1100 - (total_h // 2)
             
             for line in current_lines:
                 line = line.strip()
+                if not line: continue
                 
-                # Efek outline (stroke) untuk subtitle
+                # MATEMATIKA MURNI: Cari letak X yang pas
+                w = get_text_width(draw, line, font)
+                x_pos = (img_size[0] - w) // 2
+                
                 for ax, ay in [(-2,0),(2,0),(0,-2),(0,2),(-2,-2),(2,2),(-2,2),(2,-2)]:
-                    draw.text((x_center+ax, y+ay), line, font=font, fill="black", anchor="ma")
-                    
-                draw.text((x_center, y), line, font=font, fill="white", anchor="ma")
+                    draw.text((x_pos+ax, y+ay), line, font=font, fill="black")
+                draw.text((x_pos, y), line, font=font, fill="white")
                 y += font.size + 15
                 
             temp_path = os.path.join(BASE_DIR, f"temp_sub_{i}_{j}.png")
@@ -241,7 +223,6 @@ def render_bible_video(img_bg_path, voice_path, item, output_video):
     voice_clip = AudioFileClip(voice_path)
     video_duration = voice_clip.duration + 2.0 
     
-    # --- AUDIO MIXING ---
     bgm_file = os.path.join(BASE_DIR, "bgm.mp3")
     final_audio = voice_clip 
     
@@ -254,17 +235,14 @@ def render_bible_video(img_bg_path, voice_path, item, output_video):
         bgm_clip = bgm_clip.subclipped(0, video_duration)
         final_audio = CompositeAudioClip([bgm_clip, voice_clip.with_start(0.5)])
     
-    # --- VISUAL MIXING ---
     visual_clip = ImageClip(img_bg_path).with_duration(video_duration)
     overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.55).with_duration(video_duration)
     
-    # 1. Ayat Statis
     verse_path = create_static_verse(item, os.path.join(BASE_DIR, "verse_temp.png"))
     verse_clip = ImageClip(verse_path).with_duration(video_duration)
     
     video_layers = [visual_clip, overlay, verse_clip]
     
-    # 2. Efek Typewriter (Renungan & CTA)
     text_to_type = f"{item['renungan']} 🙏 {item['cta']}"
     subs_clip = create_typewriter_subtitles(text_to_type, voice_clip.duration)
     

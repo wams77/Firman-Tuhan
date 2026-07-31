@@ -121,9 +121,6 @@ def generate_cinematic_jesus(prompt, output_filename):
 # 3. EDGE-TTS NATIVE (DENGAN PEMBERSIH BACAAN AYAT)
 # ==========================================
 def fix_verse_for_tts(verse_text):
-    """Mengubah format titik dua ':' pada referensi ayat agar dibaca 'ayat' oleh edge-tts,
-    mencegah pembacaan keliru menjadi penunjuk waktu (pukul).
-    """
     tts_text = verse_text
     if ":" in tts_text:
         tts_text = tts_text.replace(":", " ayat ")
@@ -142,7 +139,7 @@ def generate_edge_tts_voice(text, output_audio):
     return output_audio
 
 # ==========================================
-# 4. TEKS ESTETIK (PERFECT CENTERING & ANTI-OVERFLOW)
+# 4. TEKS ESTETIK (FONT KECIL & AMAN DI TENGAH)
 # ==========================================
 def get_custom_font():
     font_filename = os.path.join(BASE_DIR, "Montserrat-Black.ttf")
@@ -154,7 +151,7 @@ def get_custom_font():
     return font_filename
 
 def get_text_width(draw, text, font):
-    """Membaca lebar pixel teks yang akurat di SEMUA versi Pillow"""
+    """Membaca lebar pixel teks yang presisi"""
     try:
         bbox = draw.textbbox((0, 0), text, font=font)
         return bbox[2] - bbox[0]
@@ -165,7 +162,7 @@ def get_text_width(draw, text, font):
             return draw.textsize(text, font=font)[0]
 
 def wrap_text_robust(text, font, draw, max_w):
-    """Pemotong baris ketat agar teks terbungkus rapi di dalam margin"""
+    """Pemotong baris dengan margin aman agar tidak keluar layar"""
     lines = []
     paragraphs = text.split('\n')
     for paragraph in paragraphs:
@@ -184,12 +181,13 @@ def wrap_text_robust(text, font, draw, max_w):
     return lines
 
 def create_static_verse(item, output_path, img_size=(1080, 1920)):
-    """Ayat Alkitab Diam (100% Rata Tengah Sempurna & Aman)"""
+    """Ayat Alkitab Diam (Font Dikecilkan & Center Sempurna)"""
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    font = ImageFont.truetype(get_custom_font(), 34)
-    max_w = img_size[0] - 300  # Margin kiri-kanan masing-masing 150px
+    # Font dikecilkan ke 28 dan margin diperlebar (max_w = 1080 - 400 = 680px)
+    font = ImageFont.truetype(get_custom_font(), 28)
+    max_w = img_size[0] - 400  
     lines = wrap_text_robust(item['ayat'], font, draw, max_w)
     
     y = 250 
@@ -198,7 +196,7 @@ def create_static_verse(item, output_path, img_size=(1080, 1920)):
         if not line: continue
         
         w = get_text_width(draw, line, font)
-        # PERHITUNGAN PRESISI: Posisi X persis di tengah layar (1080)
+        # TITIK TENGAH MUTLAK: 540 dikurangi setengah lebar teks
         x_pos = (img_size[0] - w) // 2 
         
         for ax, ay in [(-2,0),(2,0),(0,-2),(0,2),(-2,-2),(2,2),(-2,2),(2,-2)]:
@@ -211,10 +209,11 @@ def create_static_verse(item, output_path, img_size=(1080, 1920)):
     return output_path
 
 def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
-    """Efek Typewriter (100% Rata Tengah Sempurna & Aman)"""
+    """Efek Typewriter (Font Dikecilkan & Center Sempurna)"""
     print("📝 Menggambar frame Typewriter Dinamis...")
-    font = ImageFont.truetype(get_custom_font(), 40)
-    max_w = img_size[0] - 280  # Margin aman anti-keluar layar
+    # Font subtitle dikecilkan ke 34 agar muat dan aman di tengah
+    font = ImageFont.truetype(get_custom_font(), 34)
+    max_w = img_size[0] - 360  
     
     words = text.split()
     if not words: return None
@@ -240,7 +239,7 @@ def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
                 if not line: continue
                 
                 w = get_text_width(draw, line, font)
-                # PERHITUNGAN PRESISI: Posisi X persis di tengah layar
+                # TITIK TENGAH MUTLAK
                 x_pos = (img_size[0] - w) // 2
                 
                 for ax, ay in [(-2,0),(2,0),(0,-2),(0,2),(-2,-2),(2,2),(-2,2),(2,-2)]:

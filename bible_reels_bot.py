@@ -142,7 +142,7 @@ def generate_edge_tts_voice(text, output_audio):
     return output_audio
 
 # ==========================================
-# 4. TEKS ESTETIK (MANUAL CENTERING MATH)
+# 4. TEKS ESTETIK (ANTI-OVERFLOW & CENTERING)
 # ==========================================
 def get_custom_font():
     font_filename = os.path.join(BASE_DIR, "Montserrat-Black.ttf")
@@ -164,7 +164,7 @@ def get_text_width(draw, text, font):
             return draw.textsize(text, font=font)[0]
 
 def wrap_text_robust(text, font, draw, max_w):
-    """Pemotong baris yang anti-meleset"""
+    """Pemotong baris ketat agar tidak melebar keluar layar"""
     lines = []
     paragraphs = text.split('\n')
     for paragraph in paragraphs:
@@ -183,12 +183,13 @@ def wrap_text_robust(text, font, draw, max_w):
     return lines
 
 def create_static_verse(item, output_path, img_size=(1080, 1920)):
-    """Ayat Alkitab Diam (Rata Tengah Sempurna)"""
+    """Ayat Alkitab Diam (Margin Aman Anti-Overflow)"""
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    font = ImageFont.truetype(get_custom_font(), 38)
-    max_w = img_size[0] - 250 
+    # Ukuran font disetel ideal dan max_w dipersempit (margin 300px total)
+    font = ImageFont.truetype(get_custom_font(), 34)
+    max_w = img_size[0] - 300  
     lines = wrap_text_robust(item['ayat'], font, draw, max_w)
     
     y = 250 
@@ -209,10 +210,10 @@ def create_static_verse(item, output_path, img_size=(1080, 1920)):
     return output_path
 
 def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
-    """Efek Typewriter (Rata Tengah Sempurna)"""
+    """Efek Typewriter (Margin Aman Anti-Overflow)"""
     print("📝 Menggambar frame Typewriter Dinamis...")
-    font = ImageFont.truetype(get_custom_font(), 44)
-    max_w = img_size[0] - 200 
+    font = ImageFont.truetype(get_custom_font(), 40)
+    max_w = img_size[0] - 280  # Margin kiri-kanan lebih lebar agar aman di layar ponsel
     
     words = text.split()
     if not words: return None

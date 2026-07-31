@@ -14,7 +14,6 @@ from moviepy import (
     concatenate_videoclips,
     CompositeAudioClip,
 )
-from moviepy.audio.fx import MultiplyVolume
 from PIL import Image, ImageDraw, ImageFont
 
 # Mengunci direktori kerja agar file tidak "nyasar"
@@ -47,7 +46,7 @@ def generate_dynamic_content(num_videos=2):
     history_context = "\n".join(used_verses[-25:]) if used_verses else "(Belum ada riwayat, buat topik bebas)"
     
     prompt = f"""
-    Bertindaklah sebagai pembuat konten rohani Kristen (Pendeta/Kreator Rohani) yang mendalam, penuh kasih, dan menguatkan iman.
+    Bertindaklah sebagai pembuat konten rohani Kristen yang mendalam, penuh kasih, dan menguatkan iman.
     Buatlah {num_videos} naskah video pendek (Reels) berisi ayat Alkitab beserta renungan singkat yang menyejukkan hati bagi mereka yang sedang lelah, cemas, atau mencari pengharapan.
     
     ATURAN MUTLAK ANTI-DUPLIKASI: 
@@ -60,7 +59,7 @@ def generate_dynamic_content(num_videos=2):
     AYAT: [Isi ayat Alkitab yang menyentuh hati dan relevan]
     RENUNGAN: [2-3 kalimat renungan singkat yang menguatkan iman dan mendalam tentang kasih Tuhan]
     CTA: [Ajakan interaksi singkat, contoh: Tulis 'Amin' di komentar jika kamu percaya.]
-    PROMPT_GAMBAR: [Deskripsi bahasa Inggris untuk AI Gambar latar belakang rohani yang megah, misal: "Cinematic majestic light breaking through dark clouds over a peaceful valley, divine atmosphere, 8k"]
+    PROMPT_GAMBAR: [Deskripsi bahasa Inggris untuk AI Gambar latar belakang rohani yang megah, misal: "Cinematic majestic light breaking through dark clouds, divine atmosphere, 8k"]
     """
     
     raw_text = ""
@@ -151,9 +150,6 @@ def generate_cinematic_background(prompt, output_filename):
 
 # --- 3. PENGUBAH FORMAT AYAT & AI NEURAL VOICE ---
 def fix_verse_for_tts(ref_text):
-    """Mengubah format referensi ayat agar dibaca natural oleh edge-tts.
-    Contoh: 'Yeremia 4:3' menjadi 'Yeremia pasal 4 ayat 3'
-    """
     tts_text = ref_text
     if ":" in tts_text:
         parts = tts_text.split(":")
@@ -174,19 +170,19 @@ def generate_ai_voice(full_text, index, output_audio):
     subprocess.run(cmd, check=True)
     return output_audio
 
-# --- 4. TEXT OVERLAY GENERATOR (MAKSIMAL 3 KATA PER BARIS & RATA TENGAH) ---
+# --- 4. TEXT OVERLAY GENERATOR (LAYOUT RAPI, JARAK AMAN & TIDAK BERTUMPUK) ---
 def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
     font_path = get_custom_font()
-    font_ref = ImageFont.truetype(font_path, 45)
-    font_ayat = ImageFont.truetype(font_path, 38)
-    font_renungan = ImageFont.truetype(font_path, 36)
-    font_cta = ImageFont.truetype(font_path, 36)
+    font_ref = ImageFont.truetype(font_path, 42)
+    font_ayat = ImageFont.truetype(font_path, 34)
+    font_renungan = ImageFont.truetype(font_path, 32)
+    font_cta = ImageFont.truetype(font_path, 32)
     
     def chunk_text_by_word_count(text, words_per_line=3):
-        """Memotong kalimat secara otomatis setiap maksimal 3 kata per baris agar rapi di tengah"""
+        """Memotong kalimat secara otomatis setiap maksimal 3 kata per baris"""
         words = text.split()
         lines = []
         for i in range(0, len(words), words_per_line):
@@ -199,7 +195,8 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
     lines_renungan = chunk_text_by_word_count(item['renungan'], words_per_line=3)
     lines_cta = chunk_text_by_word_count(f"💬 {item['cta']}", words_per_line=3)
     
-    y = 300  # Posisi awal untuk Referensi Kitab
+    # Posisi awal vertikal ditaruh di tengah atas agar memiliki ruang luas ke bawah
+    y = 280  
 
     # 1. Render Referensi Kitab (Warna Emas/Gold - Rata Tengah)
     for line in lines_ref:
@@ -211,9 +208,9 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
         for ax, ay in [(-3,0), (3,0), (0,-3), (0,3), (-3,-3), (3,3), (-3,3), (3,-3)]:
             draw.text((x + ax, y + ay), line, font=font_ref, fill="black")
         draw.text((x, y), line, font=font_ref, fill="#FFD700")
-        y += 60
+        y += 65
 
-    y += 25  # Jarak aman
+    y += 20  # Jarak aman pemisah
 
     # 2. Render Ayat Alkitab (Warna Putih - Rata Tengah)
     for line in lines_ayat:
@@ -225,9 +222,9 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
         for ax, ay in [(-3,0), (3,0), (0,-3), (0,3), (-3,-3), (3,3), (-3,3), (3,-3)]:
             draw.text((x + ax, y + ay), line, font=font_ayat, fill="black")
         draw.text((x, y), line, font=font_ayat, fill="white")
-        y += 50
+        y += 48
 
-    y += 30  # Jarak aman ke renungan
+    y += 30  # Jarak aman pemisah ke renungan
 
     # 3. Render Renungan Singkat (Warna Silver - Rata Tengah)
     for line in lines_renungan:
@@ -239,10 +236,10 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
         for ax, ay in [(-3,0), (3,0), (0,-3), (0,3), (-3,-3), (3,3), (-3,3), (3,-3)]:
             draw.text((x + ax, y + ay), line, font=font_renungan, fill="black")
         draw.text((x, y), line, font=font_renungan, fill="#E0E0E0")
-        y += 48
+        y += 44
 
     # 4. Render CTA (Warna Cyan di Bagian Bawah - Rata Tengah)
-    y_cta = 1480
+    y_cta = 1500
     for line in lines_cta:
         try:
             w = draw.textlength(line, font=font_cta)
@@ -252,14 +249,14 @@ def create_text_overlay_image(item, output_path, img_size=(1080, 1920)):
         for ax, ay in [(-3,0), (3,0), (0,-3), (0,3), (-3,-3), (3,3), (-3,3), (3,-3)]:
             draw.text((x + ax, y_cta + ay), line, font=font_cta, fill="black")
         draw.text((x, y_cta), line, font=font_cta, fill="cyan")
-        y_cta += 45
+        y_cta += 42
 
     img.save(output_path)
     return output_path
 
-# --- 5. EDITOR VIDEO UTAMA (DENGAN MUSIK LATAR & PENGAMAN 0 BYTE) ---
+# --- 5. EDITOR VIDEO UTAMA ---
 def render_short_video(bg_image_path, audio_path, item, output_video, index, bg_music_path=None):
-    print(f"[{index}/2] 🎬 Merakit video Firman Tuhan dari gambar latar & teks...")
+    print(f"[{index}/2] 🎬 Merakit video Firman Tuhan dengan tata letak rapi...")
     
     if not os.path.exists(audio_path) or os.path.getsize(audio_path) < 1000:
         raise Exception(f"File audio {audio_path} tidak valid atau kosong!")
@@ -269,7 +266,6 @@ def render_short_video(bg_image_path, audio_path, item, output_video, index, bg_
     voice_audio = AudioFileClip(audio_path)
     video_duration = voice_audio.duration + 1.5 
     
-    # Menggabungkan Musik Latar (Volume 12% agar suara AI tetap jelas)
     if bg_music_path and os.path.exists(bg_music_path):
         print("   -> Memasang musik latar belakang rohani...")
         bg_music = AudioFileClip(bg_music_path).with_duration(video_duration).with_volume_scaled(0.12)
@@ -278,7 +274,7 @@ def render_short_video(bg_image_path, audio_path, item, output_video, index, bg_
         final_audio = voice_audio
     
     visual_clip = ImageClip(bg_image_path).with_duration(video_duration)
-    overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.5).with_duration(video_duration)
+    overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.55).with_duration(video_duration)
     
     txt_img_path = os.path.join(BASE_DIR, f"text_overlay_temp_{index}.png")
     create_text_overlay_image(item, txt_img_path)

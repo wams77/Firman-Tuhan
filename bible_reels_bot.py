@@ -21,7 +21,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 # ==========================================
 # 1. GEMINI AI: GENERATOR AYAT & RENUNGAN
 # ==========================================
-def generate_bible_content(num_videos=5):
+def generate_bible_content(num_videos=1):
     print(f"🕊️ Memohon hikmat Gemini AI untuk meracik {num_videos} renungan Firman Tuhan...")
     
     prompt = f"""
@@ -119,75 +119,77 @@ def get_custom_font():
     return font_filename
 
 def wrap_text_safe(text, font, draw, max_w):
-    """Fungsi pembantu yang aman untuk memotong teks (Mendukung Pillow lawas & baru)"""
+    """Fungsi pembantu yang aman untuk memotong teks per baris"""
     words = text.split()
-    lines, curr = [], ""
+    lines, curr = [], []
     for w in words:
-        test = f"{curr} {w}".strip()
+        curr.append(w)
+        test_line = " ".join(curr)
         
-        # Perhitungan lebar teks yang aman dari error
         try:
-            w_test = draw.textlength(test, font=font)
+            w_test = draw.textlength(test_line, font=font)
         except AttributeError:
-            w_test = draw.textbbox((0,0), test, font=font)[2]
+            bbox = draw.textbbox((0,0), test_line, font=font)
+            w_test = bbox[2] - bbox[0]
             
-        if w_test <= max_w: 
-            curr = test
-        else: 
-            if curr: lines.append(curr)
-            curr = w
-    if curr: lines.append(curr)
+        if w_test > max_w:
+            if len(curr) > 1:
+                curr.pop()
+                lines.append(" ".join(curr))
+                curr = [w]
+            else:
+                lines.append(" ".join(curr))
+                curr = []
+    if curr:
+        lines.append(" ".join(curr))
     return lines
 
 def create_static_verse(item, output_path, img_size=(1080, 1920)):
-    """Membuat Ayat Alkitab yang diam (statis) dengan SAFE ZONE yang agresif"""
+    """Membuat Ayat Alkitab yang diam (statis) tepat di tengah layar"""
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # PERBAIKAN 1: Ukuran font Ayat diperkecil drastis ke 40 agar lebih fleksibel
-    font = ImageFont.truetype(get_custom_font(), 40)
+    # PERMINTAAN USER: UKURAN FONT DIUBAH MENJADI 13
+    UKURAN_FONT = 35 
+    font = ImageFont.truetype(get_custom_font(), UKURAN_FONT)
     
-    # PERBAIKAN 2: SAFE ZONE AGRESIF (Margin kiri-kanan masing-masing 180px!)
-    # Ini memastikan teks dijamin tidak terpotong lagi.
-    max_w = img_size[0] - 360 
-    
+    max_w = img_size[0] - 300 
     lines = wrap_text_safe(item['ayat'], font, draw, max_w)
     
-    # PERBAIKAN 3: Posisi Y diturunkan sedikit agar tidak tertutup Phone UI atas
     y = 280 
+    x_center = img_size[0] // 2  # Titik paku tepat di tengah kanvas (540)
     
     for line in lines:
-        try:
-            w = draw.textlength(line, font=font)
-        except AttributeError:
-            w = draw.textbbox((0,0), line, font=font)[2]
+        line = line.strip() # Menghapus spasi siluman
+        
+        # Menggunakan anchor="ma" untuk 100% dijamin rata tengah
+        for ax, ay in [(-1,0),(1,0),(0,-1),(0,1),(-1,-1),(1,1),(-1,1),(1,-1)]:
+            draw.text((x_center+ax, y+ay), line, font=font, fill="black", anchor="ma")
             
-        x = (img_size[0] - w) // 2
-        for ax, ay in [(-3,0),(3,0),(0,-3),(0,3),(-2,-2),(2,2),(-2,2),(2,-2)]:
-            draw.text((x+ax, y+ay), line, font=font, fill="black")
-        draw.text((x, y), line, font=font, fill="gold")
+        draw.text((x_center, y), line, font=font, fill="gold", anchor="ma")
         y += font.size + 15
         
     img.save(output_path)
     return output_path
 
 def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
-    """Membuat efek Typewriter Subtitle (muncul kata per kata) mengikuti audio"""
+    """Membuat efek Typewriter Subtitle (muncul kata per kata)"""
     print("📝 Menggambar frame Typewriter Dinamis...")
     
-    # PERBAIKAN 4: Font Renungan juga disesuaikan ke Safe Zone yang lebih ketat
-    font = ImageFont.truetype(get_custom_font(), 48)
-    max_w = img_size[0] - 280 # Reels padding (140px per sisi)
+    # PERMINTAAN USER: UKURAN FONT DIUBAH MENJADI 13
+    UKURAN_FONT = 35
+    font = ImageFont.truetype(get_custom_font(), UKURAN_FONT)
+    max_w = img_size[0] - 250 
     
     words = text.split()
     if not words: return None
     
-    # Kelompokkan teks per 5 kata
     chunk_size = 5
     chunks = [words[i:i+chunk_size] for i in range(0, len(words), chunk_size)]
-    
     time_per_word = audio_duration / len(words)
     clips = []
+    
+    x_center = img_size[0] // 2 # Titik paku tepat di tengah kanvas
     
     for i, chunk_words in enumerate(chunks):
         for j in range(1, len(chunk_words) + 1):
@@ -202,15 +204,12 @@ def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
             y = 1100 - (total_h // 2)
             
             for line in current_lines:
-                try:
-                    w = draw.textlength(line, font=font)
-                except AttributeError:
-                    w = draw.textbbox((0,0), line, font=font)[2]
+                line = line.strip()
+                
+                for ax, ay in [(-1,0),(1,0),(0,-1),(0,1),(-1,-1),(1,1),(-1,1),(1,-1)]:
+                    draw.text((x_center+ax, y+ay), line, font=font, fill="black", anchor="ma")
                     
-                x = (img_size[0] - w) // 2
-                for ax, ay in [(-3,0),(3,0),(0,-3),(0,3),(-2,-2),(2,2),(-2,2),(2,-2)]:
-                    draw.text((x+ax, y+ay), line, font=font, fill="black")
-                draw.text((x, y), line, font=font, fill="white")
+                draw.text((x_center, y), line, font=font, fill="white", anchor="ma")
                 y += font.size + 15
                 
             temp_path = os.path.join(BASE_DIR, f"temp_sub_{i}_{j}.png")
@@ -248,7 +247,7 @@ def render_bible_video(img_bg_path, voice_path, item, output_video):
     visual_clip = ImageClip(img_bg_path).with_duration(video_duration)
     overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.55).with_duration(video_duration)
     
-    # 1. Ayat Statis (Diam di atas, SEKARANG AMAN)
+    # 1. Ayat Statis
     verse_path = create_static_verse(item, os.path.join(BASE_DIR, "verse_temp.png"))
     verse_clip = ImageClip(verse_path).with_duration(video_duration)
     
@@ -308,7 +307,7 @@ def upload_to_facebook(video_path, caption, index):
 # EKSEKUTOR UTAMA
 # ==========================================
 if __name__ == "__main__":
-    JUMLAH_VIDEO = 5 
+    JUMLAH_VIDEO = 1 
     print(f"✝️ MEMULAI BOT PENGINJIL DIGITAL ({JUMLAH_VIDEO} VIDEO) ✝️\n")
     
     batch = generate_bible_content(JUMLAH_VIDEO)

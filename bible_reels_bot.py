@@ -139,7 +139,7 @@ def generate_edge_tts_voice(text, output_audio):
     return output_audio
 
 # ==========================================
-# 4. TEKS ESTETIK (PROFESSIONAL LEFT-ALIGNED & ROBUST WRAP)
+# 4. TEKS ESTETIK (MAKSIMAL 3 KATA PER BARIS & RATA TENGAH)
 # ==========================================
 def get_custom_font():
     font_filename = os.path.join(BASE_DIR, "Montserrat-Black.ttf")
@@ -161,42 +161,34 @@ def get_text_width(draw, text, font):
         except AttributeError:
             return draw.textsize(text, font=font)[0]
 
-def wrap_text_robust(text, font, draw, max_w):
-    """Algoritma pemotong baris (wrap) yang bersih dan akurat"""
+def chunk_text_by_word_count(text, words_per_line=3):
+    """Memotong kalimat secara paksa setiap 3 kata ke baris baru"""
+    words = text.split()
     lines = []
-    paragraphs = text.split('\n')
-    for paragraph in paragraphs:
-        words = paragraph.split()
-        if not words: continue
-        current_line = words[0]
-        for word in words[1:]:
-            test_line = f"{current_line} {word}"
-            w_test = get_text_width(draw, test_line, font)
-            if w_test <= max_w:
-                current_line = test_line
-            else:
-                lines.append(current_line)
-                current_line = word
-        lines.append(current_line)
+    for i in range(0, len(words), words_per_line):
+        line = " ".join(words[i:i+words_per_line])
+        lines.append(line)
     return lines
 
 def create_static_verse(item, output_path, img_size=(1080, 1920)):
-    """Ayat Alkitab (Rata Kiri Profesional dengan Margin 100px)"""
+    """Ayat Alkitab (Maksimal 3 kata per baris & Rata Tengah Sempurna)"""
     img = Image.new("RGBA", img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    font = ImageFont.truetype(get_custom_font(), 32)
-    x_pos = 100  # Margin kiri tetap 100px
-    max_w = img_size[0] - 200  # Lebar area teks (1080 - 200 = 880px)
+    font = ImageFont.truetype(get_custom_font(), 36)
+    # Memecah teks ayat menjadi maksimal 3 kata per baris
+    lines = chunk_text_by_word_count(item['ayat'], words_per_line=3)
     
-    lines = wrap_text_robust(item['ayat'], font, draw, max_w)
-    
-    y = 250 
+    y = 220  # Posisi awal vertikal untuk ayat
     for line in lines:
         line = line.strip()
         if not line: continue
         
-        # Efek bayangan hitam (stroke)
+        w = get_text_width(draw, line, font)
+        # MATEMATIKA RATA TENGAH MUTLAK
+        x_pos = (img_size[0] - w) // 2 
+        
+        # Bayangan teks (Outline hitam)
         for ax, ay in [(-2,0),(2,0),(0,-2),(0,2),(-2,-2),(2,2),(-2,2),(2,-2)]:
             draw.text((x_pos+ax, y+ay), line, font=font, fill="black")
             
@@ -208,16 +200,14 @@ def create_static_verse(item, output_path, img_size=(1080, 1920)):
     return output_path
 
 def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
-    """Efek Typewriter (Rata Kiri Profesional dengan Margin 100px)"""
+    """Efek Typewriter Dinamis (Maksimal 3-4 kata per baris & Rata Tengah Sempurna)"""
     print("📝 Menggambar frame Typewriter Dinamis...")
-    font = ImageFont.truetype(get_custom_font(), 38)
-    x_pos = 100  # Margin kiri tetap 100px
-    max_w = img_size[0] - 200  # Lebar area teks 880px
+    font = ImageFont.truetype(get_custom_font(), 42)
     
     words = text.split()
     if not words: return None
     
-    chunk_size = 4
+    chunk_size = 3  # Tampilkan 3 kata sekaligus per tahap animasi
     chunks = [words[i:i+chunk_size] for i in range(0, len(words), chunk_size)]
     time_per_word = audio_duration / len(words)
     clips = []
@@ -229,13 +219,18 @@ def create_typewriter_subtitles(text, audio_duration, img_size=(1080, 1920)):
             img = Image.new("RGBA", img_size, (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
             
-            current_lines = wrap_text_robust(current_text, font, draw, max_w)
+            # Setiap baris renungan dipecah maksimal 3 kata agar tidak kepanjangan
+            current_lines = chunk_text_by_word_count(current_text, words_per_line=3)
             total_h = len(current_lines) * (font.size + 15)
             y = 1100 - (total_h // 2)
             
             for line in current_lines:
                 line = line.strip()
                 if not line: continue
+                
+                w = get_text_width(draw, line, font)
+                # MATEMATIKA RATA TENGAH MUTLAK
+                x_pos = (img_size[0] - w) // 2
                 
                 for ax, ay in [(-2,0),(2,0),(0,-2),(0,2),(-2,-2),(2,2),(-2,2),(2,-2)]:
                     draw.text((x_pos+ax, y+ay), line, font=font, fill="black")

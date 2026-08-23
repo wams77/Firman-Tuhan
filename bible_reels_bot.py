@@ -41,7 +41,7 @@ def mark_verse_as_used(verse_ref):
 
 # --- 1. GROQ AI: GENERATOR AYAT ALKITAB & PEXELS QUERY ---
 def generate_dynamic_content(num_videos=2):
-  print(f"🕊️ Meminta Groq GPT-OSS 120 meracik {num_videos} naskah Firman Tuhan & kueri video Pexels...")
+    print(f"🕊️ Meminta Groq GPT-OSS 120 meracik {num_videos} naskah Firman Tuhan & kueri video Pexels...")
     
     used_verses = get_used_verses()
     history_context = "\n".join(used_verses[-25:]) if used_verses else "(Belum ada riwayat, buat topik bebas)"
